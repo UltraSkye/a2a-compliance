@@ -27,6 +27,10 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      # pnpm audit catches newly-disclosed CVEs in transitive deps on
+      # every PR. --audit-level=moderate so low-severity advisories
+      # surface in logs without failing the build.
+      - run: pnpm audit --audit-level=moderate
       - run: pnpm lint
       - run: pnpm typecheck
       # Web typecheck folded into the main job so regressions fail fast
