@@ -45,3 +45,25 @@ several classes of bug are particularly interesting for this project:
 Out of scope: DoS via one-off slow agents (timeouts are user-tunable),
 social engineering, or misuse by an operator who already has shell
 access.
+
+## Known residual risks
+
+The following are documented rather than mitigated in code; the
+mitigation lives in how you deploy the tool.
+
+- **SSRF after 30x redirect.** `ssrfCheckForUrl` validates the input URL
+  but internal fetches follow redirects transparently. A public target
+  that 302s to a private IP can still land us on the private IP.
+  Mitigation: run the hosted dashboard inside a network namespace that
+  blocks egress to RFC 1918 / link-local / carrier-NAT ranges. Docker
+  example: `--network none` with an explicit allowlist egress proxy,
+  or an AWS security group / GCP firewall rule denying 10/8, 172.16/12,
+  192.168/16, 169.254/16 on the container's egress interface.
+
+- **DNS rebinding (TOCTOU).** The SSRF guard resolves a hostname at
+  check time; the actual HTTP connection happens milliseconds later
+  against whatever DNS returns then. A malicious authoritative DNS can
+  answer with a public IP for the check, then a private IP for the
+  fetch. No user-space fix short of bypassing libc resolution and
+  pinning to the checked address.  Mitigation: same network-layer
+  allowlist as above.

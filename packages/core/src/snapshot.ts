@@ -1,13 +1,25 @@
+import { z } from 'zod';
 import type { CheckStatus, ComplianceReport } from './report.js';
 
 export const SNAPSHOT_VERSION = 1 as const;
 
-export interface Snapshot {
-  version: typeof SNAPSHOT_VERSION;
-  target: string;
-  specVersion: string;
-  capturedAt: string;
-  checks: Record<string, CheckStatus>;
+export const SnapshotSchema = z.object({
+  version: z.literal(SNAPSHOT_VERSION),
+  target: z.string(),
+  specVersion: z.string(),
+  capturedAt: z.string(),
+  checks: z.record(z.string(), z.enum(['pass', 'fail', 'warn', 'skip'])),
+});
+export type Snapshot = z.infer<typeof SnapshotSchema>;
+
+/**
+ * Parse an arbitrary value into a Snapshot. Returns null when the shape is
+ * wrong or the version is something we don't recognise — callers should
+ * surface a clear error rather than silently diffing against garbage.
+ */
+export function parseSnapshot(raw: unknown): Snapshot | null {
+  const parsed = SnapshotSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
 }
 
 export interface SnapshotDiffEntry {
@@ -36,6 +48,10 @@ export function toSnapshot(report: ComplianceReport): Snapshot {
     checks,
   };
 }
+
+// Expose CheckStatus alongside Snapshot so CLI consumers don't have to drag
+// in the full report.ts types.
+export type { CheckStatus };
 
 // Severity order used to classify regression vs improvement.
 // Higher = worse. 'skip' sits next to 'pass' — losing a previously-passing
