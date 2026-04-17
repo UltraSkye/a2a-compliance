@@ -4,6 +4,29 @@ import { z } from 'zod';
 // Canonical URL: https://a2a-protocol.org/latest/specification/#agent-card
 // Keep assertions here narrow & literal; richer semantic checks live in @a2a-compliance/core.
 
+/**
+ * URL field that rejects non-http(s) schemes. Zod's `.url()` accepts
+ * anything Node's URL parser accepts, including `javascript:`, `data:`,
+ * `file:`, `mailto:`, `gopher:` — none of which an A2A client should
+ * ever follow. Tightening this at the schema level prevents a malicious
+ * agent card from feeding those URIs to downstream consumers of the
+ * parsed card.
+ */
+const httpUrl = z
+  .string()
+  .url()
+  .refine(
+    (u) => {
+      try {
+        const p = new URL(u).protocol;
+        return p === 'http:' || p === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    { message: 'must be an http(s) URL' },
+  );
+
 export const AgentSkillSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -17,7 +40,7 @@ export type AgentSkill = z.infer<typeof AgentSkillSchema>;
 
 export const AgentProviderSchema = z.object({
   organization: z.string(),
-  url: z.string().url().optional(),
+  url: httpUrl.optional(),
 });
 export type AgentProvider = z.infer<typeof AgentProviderSchema>;
 
@@ -39,13 +62,13 @@ export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
 export const AgentCardSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  url: z.string().url(),
+  url: httpUrl,
   provider: AgentProviderSchema.optional(),
   version: z.string().min(1),
   // Spec version (Agent2Agent protocol). Present from v0.3 onward. Missing
   // on very old or hand-rolled cards — treat as unknown.
   protocolVersion: z.string().optional(),
-  documentationUrl: z.string().url().optional(),
+  documentationUrl: httpUrl.optional(),
   capabilities: AgentCapabilitiesSchema,
   authentication: AgentAuthenticationSchema.optional(),
   defaultInputModes: z.array(z.string()).optional(),
