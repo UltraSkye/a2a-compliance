@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { ssrfCheckForUrl } from './private-network.js';
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
@@ -13,9 +15,20 @@ export const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_MAX_REDIRECTS = 10;
 
 // User-Agent we identify as when probing. Letting an operator see
-// 'a2a-compliance/…' in their access log is politer than blank / node-fetch
-// and makes it clear what's hitting their endpoint.
-export const USER_AGENT = 'a2a-compliance/0.1';
+// 'a2a-compliance/<ver>' in their access log is politer than blank /
+// node-fetch and tells them exactly which release is hitting their
+// endpoint. Version is read from this package's own package.json so
+// the UA stays in sync with whatever tag was actually published.
+function readPackageVersion(): string {
+  try {
+    const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string };
+    return pkg.version ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+export const USER_AGENT = `a2a-compliance/${readPackageVersion()}`;
 
 export interface FetchOptions {
   method?: string;
