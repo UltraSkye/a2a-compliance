@@ -20,9 +20,16 @@ human-readable summary.
 
 ## Status
 
-Very early. Agent Card validator lands in week 1–2; protocol and
-security checks in weeks 3–4. See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
-for the full roadmap.
+Early but usable. Coverage today:
+
+- Agent Card: reachability, schema, content-type, URL shape
+- JSON-RPC 2.0 envelope: parse-error, invalid-request, method-not-found
+- A2A methods: `tasks/get`, `message/send`, `message/stream` (SSE)
+- Security: SSRF probe on every card URL, HTTPS enforcement,
+  CORS wildcard-with-credentials
+
+See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full
+roadmap and the check-id taxonomy.
 
 ## Quick start
 

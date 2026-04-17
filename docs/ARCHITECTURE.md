@@ -64,12 +64,11 @@ Exit code policy (`--fail-on`):
 1. **Week 1** — Agent Card validator ✅ *shipped*
 2. **Week 2** — JSON-RPC envelope conformance + JUnit reporter ✅ *shipped*
 3. **Week 3** — `message/send` happy path + `message/stream` SSE sanity ✅ *shipped*
-4. **Week 4** — Security checks: SSRF / DNS rebinding probe, TLS cert
-   hygiene, OAuth discovery sanity, well-known header leaks. Also:
-   `tasks/resubscribe`, push-notification config round-trip.
+4. **Week 4** — SSRF, HTTPS, CORS security checks ✅ *shipped*
 5. **Week 5** — Next.js dashboard + GitHub Action wrapper.
 6. **Week 6** — DX polish: `init` command, snapshot/regression mode,
-   versioned spec selector.
+   versioned spec selector, `tasks/resubscribe`, push-notification config
+   round-trip.
 7. **Week 7** — Public launch.
 
 ## Current assertions
@@ -88,6 +87,9 @@ Exit code policy (`--fail-on`):
 | `rpc.tasksGet.notFound` | should | A2A method |
 | `rpc.messageSend.shape` | must | A2A method |
 | `rpc.messageStream.contentType` | should | A2A method (streaming) |
+| `sec.tls.https` | must | Security / Transport |
+| `sec.ssrf` | must | Security / SSRF |
+| `sec.cors.wildcardWithCreds` | must | Security / CORS |
 
 ### Handling "tolerated" errors
 
@@ -98,3 +100,22 @@ Message, or (b) rejects our probe with a small whitelist of sensible error
 codes (`-32602`, `-32603`, `-32004`, `-32005`, `-32006`). Those cases are
 reported as **warn** rather than **fail**, so they don't break CI but still
 surface in the report.
+
+### Security-check policy
+
+The SSRF probe resolves each URL referenced by the agent card
+(`url`, `provider.url`, `documentationUrl`) and fails if any resolution
+lands in: loopback (`127.0.0.0/8`, `::1`), link-local
+(`169.254.0.0/16`, `fe80::/10`), RFC 1918 (`10/8`, `172.16/12`,
+`192.168/16`), carrier-grade NAT (`100.64/10`), ULA (`fc00::/7`), or the
+cloud metadata address `169.254.169.254`. Literal IPs are checked
+without DNS; hostnames are resolved via Node's `dns.lookup`. The DNS
+stub is trusted — true DNS rebinding is out of scope for this check and
+is planned for a dedicated probe later.
+
+The CORS check flags the specific browser-spec violation of
+`Access-Control-Allow-Origin: *` combined with
+`Access-Control-Allow-Credentials: true`.
+
+All security checks are skippable via `--skip-security`; the runner
+otherwise includes them in every full run.
