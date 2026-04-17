@@ -12,6 +12,11 @@ export const DEFAULT_MAX_BODY_BYTES = 2 * 1024 * 1024;
 // private targets, so this is a generous ceiling.
 export const DEFAULT_MAX_REDIRECTS = 10;
 
+// User-Agent we identify as when probing. Letting an operator see
+// 'a2a-compliance/…' in their access log is politer than blank / node-fetch
+// and makes it clear what's hitting their endpoint.
+export const USER_AGENT = 'a2a-compliance/0.1';
+
 export interface FetchOptions {
   method?: string;
   headers?: Record<string, string>;
@@ -45,12 +50,14 @@ export async function fetchWithTimeout(url: string, opts: FetchOptions = {}): Pr
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
     let res: Response;
     try {
+      const headers = new Headers(opts.headers);
+      if (!headers.has('user-agent')) headers.set('user-agent', USER_AGENT);
       const init: RequestInit = {
         method: opts.method ?? 'GET',
         signal: ctrl.signal,
         redirect: 'manual',
+        headers,
       };
-      if (opts.headers) init.headers = opts.headers;
       if (opts.body !== undefined) init.body = opts.body;
       res = await fetch(currentUrl, init);
     } finally {
