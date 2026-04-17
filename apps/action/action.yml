@@ -1,0 +1,66 @@
+name: 'a2a-compliance'
+description: 'Run an A2A protocol compliance check against one or more agent endpoints.'
+author: 'a2a-compliance contributors'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  url:
+    description: 'The A2A endpoint base URL (the host, not the /.well-known path).'
+    required: true
+  fail-on:
+    description: 'Exit policy: any | must (default) | never.'
+    required: false
+    default: 'must'
+  junit:
+    description: 'Path to write JUnit XML report. Omit to skip.'
+    required: false
+    default: ''
+  badge:
+    description: 'Path to write an SVG badge. Omit to skip.'
+    required: false
+    default: ''
+  skip-protocol:
+    description: 'Set to true to skip live JSON-RPC checks.'
+    required: false
+    default: 'false'
+  skip-security:
+    description: 'Set to true to skip SSRF/TLS/CORS security checks.'
+    required: false
+    default: 'false'
+
+outputs:
+  report:
+    description: 'Path to the JSON compliance report.'
+    value: ${{ steps.run.outputs.report }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Run a2a-compliance
+      id: run
+      shell: bash
+      env:
+        INPUT_URL: ${{ inputs.url }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_JUNIT: ${{ inputs.junit }}
+        INPUT_BADGE: ${{ inputs.badge }}
+        INPUT_SKIP_PROTOCOL: ${{ inputs.skip-protocol }}
+        INPUT_SKIP_SECURITY: ${{ inputs.skip-security }}
+      run: |
+        set -eu
+        REPORT="$RUNNER_TEMP/a2a-compliance-report.json"
+        ARGS=(--json --fail-on "$INPUT_FAIL_ON")
+        [ -n "$INPUT_JUNIT" ] && ARGS+=(--junit "$INPUT_JUNIT")
+        [ -n "$INPUT_BADGE" ] && ARGS+=(--badge "$INPUT_BADGE")
+        [ "$INPUT_SKIP_PROTOCOL" = "true" ] && ARGS+=(--skip-protocol)
+        [ "$INPUT_SKIP_SECURITY" = "true" ] && ARGS+=(--skip-security)
+
+        npx --yes @a2a-compliance/cli@latest run "$INPUT_URL" "${ARGS[@]}" > "$REPORT"
+        echo "report=$REPORT" >> "$GITHUB_OUTPUT"

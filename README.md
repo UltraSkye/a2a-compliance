@@ -52,6 +52,33 @@ pnpm cli run https://your-agent.example.com --json > report.json
 
 # JUnit XML (drop straight into GitHub Actions, GitLab, Jenkins result viewers)
 pnpm cli run https://your-agent.example.com --junit ./report.junit.xml
+
+# Shields-style SVG badge for your README
+pnpm cli run https://your-agent.example.com --badge ./badge.svg
+```
+
+### GitHub Action
+
+```yaml
+- uses: UltraSkye/a2a-compliance@v1
+  with:
+    url: https://agent.example.com
+    junit: ./reports/a2a.junit.xml
+    badge: ./badges/a2a.svg
+```
+
+See [`apps/action/README.md`](./apps/action/README.md) for all inputs and
+outputs.
+
+### Interactive dashboard
+
+A Next.js app lives in `apps/web`. Paste a URL into the form and get the
+same report the CLI produces:
+
+```bash
+pnpm -r --filter=./packages/* build   # core/schemas/cli must be built once
+pnpm --filter @a2a-compliance/web dev
+# → http://localhost:3000
 ```
 
 Exit code policy is controlled by `--fail-on`:
@@ -69,9 +96,10 @@ This is a pnpm workspace monorepo.
 | Package | Description |
 |---------|-------------|
 | [`packages/schemas`](./packages/schemas) | Zod schemas for the A2A spec |
-| [`packages/core`](./packages/core)       | Assertion engine + test runner |
+| [`packages/core`](./packages/core)       | Assertion engine + reporters (JSON, JUnit, badge SVG) |
 | [`packages/cli`](./packages/cli)         | `a2a-compliance` command-line |
-| [`apps/web`](./apps/web)                 | (planned) Next.js dashboard |
+| [`apps/web`](./apps/web)                 | Next.js 15 dashboard |
+| [`apps/action`](./apps/action)           | GitHub composite Action |
 
 ## Development
 
