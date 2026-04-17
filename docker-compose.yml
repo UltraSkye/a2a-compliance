@@ -10,3 +10,31 @@ services:
     # The dashboard runs outbound probes against user-supplied URLs.
     # Keep it on the default bridge network so the container cannot
     # reach host-local services unless explicitly exposed.
+
+  # Mock agent fixtures — opt in with `docker compose --profile demo up`.
+  # Not started by default. Each one serves a single agent card at the
+  # A2A well-known path, intended for CLI testing (the web dashboard
+  # intentionally refuses to probe private-space targets).
+  mock-good:
+    profiles: [demo]
+    image: nginx:alpine
+    ports: ["${A2A_MOCK_GOOD_PORT:-8001}:80"]
+    volumes:
+      - ./examples/mock-agents/good:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+  mock-bad:
+    profiles: [demo]
+    image: nginx:alpine
+    ports: ["${A2A_MOCK_BAD_PORT:-8002}:80"]
+    volumes:
+      - ./examples/mock-agents/bad:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+  mock-broken:
+    profiles: [demo]
+    image: nginx:alpine
+    ports: ["${A2A_MOCK_BROKEN_PORT:-8003}:80"]
+    volumes:
+      - ./examples/mock-agents/broken:/usr/share/nginx/html:ro
+    restart: unless-stopped
