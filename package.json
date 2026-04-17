@@ -18,11 +18,16 @@
     "lint:fix": "biome check --write .",
     "typecheck": "pnpm -r --filter=./packages/* typecheck",
     "cli": "pnpm --filter @a2a-compliance/cli start",
-    "clean": "pnpm -r exec rm -rf dist node_modules .turbo"
+    "clean": "pnpm -r exec rm -rf dist node_modules .turbo",
+    "prepare": "simple-git-hooks || true"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
     "@types/node": "^24.0.0",
+    "simple-git-hooks": "^2.13.1",
     "typescript": "^5.6.0",
     "vitest": "^4.1.4"
   }
