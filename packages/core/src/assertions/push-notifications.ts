@@ -7,6 +7,7 @@ import {
   JsonRpcResponseSchema,
 } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now, readCappedJson, readCappedText } from '../http.js';
+import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
 
@@ -92,7 +93,7 @@ async function probePush(
       title,
       severity: 'should',
       status: 'fail',
-      message: err instanceof Error ? err.message : String(err),
+      message: redactInText(err instanceof Error ? err.message : String(err)),
       durationMs: now() - t0,
     };
   }

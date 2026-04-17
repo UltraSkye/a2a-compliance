@@ -1,5 +1,6 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now, readCappedJson } from '../http.js';
+import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 
 export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
@@ -25,7 +26,7 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
       title: `Agent card reachable at ${AGENT_CARD_WELL_KNOWN_PATH}`,
       severity: 'must',
       status: 'fail',
-      message: err instanceof Error ? err.message : String(err),
+      message: redactInText(err instanceof Error ? err.message : String(err)),
       durationMs: now() - t0,
     });
     return results;
@@ -51,7 +52,7 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
       title: 'Agent card body is valid JSON',
       severity: 'must',
       status: 'fail',
-      message: err instanceof Error ? err.message : 'invalid JSON',
+      message: redactInText(err instanceof Error ? err.message : 'invalid JSON'),
       durationMs: now() - t1,
     });
     return results;
@@ -100,7 +101,7 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
       title: 'card.url is absolute http(s) URL',
       severity: 'must',
       status: urlOk ? 'pass' : 'fail',
-      ...(urlOk ? {} : { message: `got ${card.url}` }),
+      ...(urlOk ? {} : { message: `got ${redactInText(card.url)}` }),
       durationMs: 0,
     });
 

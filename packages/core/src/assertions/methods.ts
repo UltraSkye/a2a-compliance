@@ -7,6 +7,7 @@ import {
   TaskSchema,
 } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now, readCappedText } from '../http.js';
+import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
 
@@ -112,7 +113,7 @@ export async function messageSendCheck(
     return fail(
       'rpc.messageSend.shape',
       `${methods.send} returns a valid JSON-RPC response`,
-      err instanceof Error ? err.message : String(err),
+      redactInText(err instanceof Error ? err.message : String(err)),
       t0,
     );
   }
@@ -188,7 +189,7 @@ export async function messageStreamContentTypeCheck(
     return fail(
       'rpc.messageStream.contentType',
       `${methods.stream} responds with text/event-stream`,
-      err instanceof Error ? err.message : String(err),
+      redactInText(err instanceof Error ? err.message : String(err)),
       t0,
     );
   }
