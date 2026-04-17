@@ -78,14 +78,17 @@ export async function messageSendCheck(
     if (isErrorResponse(parsed.data)) {
       const code = parsed.data.error.code;
       const toleratedOk = TOLERATED_SEND_ERROR_CODES.includes(code);
+      // parsed.data.error.message is agent-controlled; redact embedded URLs
+      // before it lands in reports.
+      const agentMsg = redactInText(parsed.data.error.message);
       return {
         id: 'rpc.messageSend.shape',
         title: `${methods.send} returns a valid JSON-RPC response`,
         severity: 'must',
         status: toleratedOk ? 'warn' : 'fail',
         message: toleratedOk
-          ? `agent rejected probe with tolerated error ${code}: ${parsed.data.error.message}`
-          : `unexpected error code ${code}: ${parsed.data.error.message}`,
+          ? `agent rejected probe with tolerated error ${code}: ${agentMsg}`
+          : `unexpected error code ${code}: ${agentMsg}`,
         durationMs: now() - t0,
       };
     }
