@@ -1,13 +1,14 @@
 import { writeFileSync } from 'node:fs';
-import type { CheckResult } from '@a2a-compliance/core';
 import { runFullChecks, toJUnitXml } from '@a2a-compliance/core';
 import type { Command } from 'commander';
 import pc from 'picocolors';
+import type { FailOn } from '../output.js';
+import { decideExit, printHuman } from '../output.js';
 
 interface RunOptions {
   json?: boolean;
   junit?: string;
-  failOn?: 'any' | 'must' | 'never';
+  failOn?: FailOn;
   skipProtocol?: boolean;
   skipSecurity?: boolean;
 }
@@ -44,44 +45,4 @@ export function registerRunCommand(program: Command): void {
 
       process.exit(decideExit(report.checks, opts.failOn ?? 'must'));
     });
-}
-
-function printHuman(target: string, checks: CheckResult[]): void {
-  console.log(pc.bold(`\nA2A compliance — ${target}\n`));
-  for (const c of checks) {
-    const icon = statusIcon(c.status);
-    const sev = pc.dim(`[${c.severity.toUpperCase()}]`);
-    console.log(`  ${icon} ${sev} ${c.title}`);
-    if (c.message) {
-      console.log(`    ${pc.dim(c.message)}`);
-    }
-  }
-
-  const pass = checks.filter((c) => c.status === 'pass').length;
-  const fail = checks.filter((c) => c.status === 'fail').length;
-  const warn = checks.filter((c) => c.status === 'warn').length;
-  console.log(
-    `\n  ${pc.green(`${pass} passed`)}, ${pc.yellow(`${warn} warnings`)}, ${pc.red(`${fail} failed`)}\n`,
-  );
-}
-
-function statusIcon(status: CheckResult['status']): string {
-  switch (status) {
-    case 'pass':
-      return pc.green('✓');
-    case 'fail':
-      return pc.red('✗');
-    case 'warn':
-      return pc.yellow('!');
-    case 'skip':
-      return pc.dim('-');
-  }
-}
-
-function decideExit(checks: CheckResult[], mode: 'any' | 'must' | 'never'): number {
-  if (mode === 'never') return 0;
-  const failed = checks.filter((c) => c.status === 'fail');
-  if (mode === 'any' && failed.length > 0) return 1;
-  if (mode === 'must' && failed.some((c) => c.severity === 'must')) return 1;
-  return 0;
 }
