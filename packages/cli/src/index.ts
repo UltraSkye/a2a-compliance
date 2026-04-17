@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { registerCardCommand } from './commands/card.js';
+import { registerRunCommand } from './commands/run.js';
 
 const program = new Command();
 
@@ -10,6 +11,7 @@ program
   .version('0.0.0');
 
 registerCardCommand(program);
+registerRunCommand(program);
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : err);
