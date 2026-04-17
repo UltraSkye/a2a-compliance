@@ -1,0 +1,41 @@
+version: 2
+updates:
+  # npm deps across every workspace package
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      # Batch dev tooling into one PR to reduce review load
+      dev-tooling:
+        patterns:
+          - "@biomejs/*"
+          - "typescript"
+          - "vitest"
+          - "@types/*"
+        update-types:
+          - patch
+          - minor
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # GitHub Actions — keep workflow pins fresh
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+
+  # Docker base image
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
