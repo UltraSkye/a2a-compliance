@@ -1,0 +1,8 @@
+{
+  "name": "bad-mock-agent",
+  "description": "Card pointing at cleartext HTTP and link-local IP — should trip HTTPS and SSRF checks",
+  "url": "http://169.254.169.254/a2a",
+  "version": "1.0.0",
+  "capabilities": {},
+  "skills": [{ "id": "demo", "name": "Demo" }]
+}
