@@ -41,10 +41,19 @@ function sumDuration(checks: ComplianceReport['checks']): number {
 }
 
 function xmlAttr(s: string): string {
-  return s
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('\n', ' ');
+  return (
+    s
+      // XML 1.0 forbids most control characters entirely. Strip them so a
+      // hostile agent card message can't make downstream XML parsers choke
+      // or inject unintended structure.
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional.
+      .replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+      // Normalise whitespace to plain spaces so multi-line messages stay on
+      // one line in attribute values.
+      .replaceAll(/[\r\n\t]/g, ' ')
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+  );
 }

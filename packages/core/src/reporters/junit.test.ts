@@ -60,4 +60,34 @@ describe('toJUnitXml', () => {
     expect(xml).toContain('&amp;');
     expect(xml).toContain('&lt;stuff&gt;');
   });
+
+  it('strips disallowed control chars and normalises whitespace', () => {
+    const report: ComplianceReport = {
+      ...baseReport,
+      checks: [
+        {
+          id: 'c\u0001trl',
+          title: 'with\u0000null\u0001and\ttab',
+          severity: 'must',
+          status: 'fail',
+          // Classic XML-injection payload smuggled via \r\n in a message.
+          message: 'line1\r\nline2 <injected>" type="custom',
+          durationMs: 0,
+        },
+      ],
+      summary: { total: 1, pass: 0, fail: 1, warn: 0, skip: 0 },
+    };
+    const xml = toJUnitXml(report);
+
+    // No raw control characters in the output (except the single newlines
+    // the renderer itself emits between elements).
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: testing that stripping works.
+    expect(xml).not.toMatch(/[\u0000\u0001]/);
+    // The attempt to break out of the attribute must be escaped.
+    expect(xml).toContain('&lt;injected&gt;&quot;');
+    // CRLF is normalised to spaces.
+    expect(xml).not.toContain('line1\r');
+    expect(xml).not.toContain('line1\n');
+    expect(xml).toMatch(/line1\s+line2/);
+  });
 });
