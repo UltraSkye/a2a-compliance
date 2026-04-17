@@ -30,14 +30,21 @@ for the full roadmap.
 pnpm install
 pnpm build
 
-# Validate an A2A endpoint's agent card
+# Full compliance run: agent card + live JSON-RPC protocol conformance
+pnpm cli run https://your-agent.example.com
+
+# Card-only (faster, no live probes)
 pnpm cli card https://your-agent.example.com
 ```
 
-Machine-readable output for CI:
+CI-friendly outputs:
 
 ```bash
-pnpm cli card https://your-agent.example.com --json > report.json
+# Machine-readable JSON on stdout
+pnpm cli run https://your-agent.example.com --json > report.json
+
+# JUnit XML (drop straight into GitHub Actions, GitLab, Jenkins result viewers)
+pnpm cli run https://your-agent.example.com --junit ./report.junit.xml
 ```
 
 Exit code policy is controlled by `--fail-on`:

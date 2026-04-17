@@ -61,12 +61,29 @@ Exit code policy (`--fail-on`):
 
 ## Roadmap
 
-1. **Week 1–2** — Agent Card validator (this scaffold).
-2. **Week 3** — Protocol conformance: `message/send`, `tasks/get`, SSE
-   streaming, JSON-RPC error codes.
-3. **Week 4** — Security checks: SSRF / DNS rebinding probe, TLS cert
-   hygiene, OAuth discovery sanity.
-4. **Week 5** — Next.js dashboard + GitHub Action wrapper.
-5. **Week 6** — DX polish: `init` command, snapshot/regression mode,
+1. **Week 1** — Agent Card validator ✅ *shipped*
+2. **Week 2** — JSON-RPC envelope conformance + JUnit reporter ✅ *shipped*
+3. **Week 3** — Deeper protocol: `message/send` happy path, SSE
+   streaming sanity (`message/stream`, `tasks/resubscribe`), push
+   notification config round-trip.
+4. **Week 4** — Security checks: SSRF / DNS rebinding probe, TLS cert
+   hygiene, OAuth discovery sanity, well-known header leaks.
+5. **Week 5** — Next.js dashboard + GitHub Action wrapper.
+6. **Week 6** — DX polish: `init` command, snapshot/regression mode,
    versioned spec selector.
-6. **Week 7** — Public launch.
+7. **Week 7** — Public launch.
+
+## Current assertions
+
+| ID | Severity | Category |
+|----|----------|----------|
+| `card.reachable` | must | Agent Card |
+| `card.json` | must | Agent Card |
+| `card.schema` | must | Agent Card |
+| `card.contentType` | should | Agent Card |
+| `card.urlAbsolute` | must | Agent Card |
+| `card.skillsNonEmpty` | must | Agent Card |
+| `rpc.parseError` | must | JSON-RPC |
+| `rpc.invalidRequest` | must | JSON-RPC |
+| `rpc.methodNotFound` | must | JSON-RPC |
+| `rpc.tasksGet.notFound` | should | A2A method |
