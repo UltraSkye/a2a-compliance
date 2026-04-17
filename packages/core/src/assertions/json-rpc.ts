@@ -101,7 +101,6 @@ export async function jsonRpcChecks(
 ): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
-  // 1. Invalid JSON body → -32700 Parse error
   results.push(
     await probe(endpoint, 'rpc.parseError', 'must', {
       title: 'Rejects invalid JSON with -32700 Parse error',
@@ -110,7 +109,6 @@ export async function jsonRpcChecks(
     }),
   );
 
-  // 2. Invalid envelope (missing jsonrpc field) → -32600 Invalid Request
   results.push(
     await probe(endpoint, 'rpc.invalidRequest', 'must', {
       title: 'Rejects malformed JSON-RPC envelope with -32600 Invalid Request',
@@ -119,7 +117,6 @@ export async function jsonRpcChecks(
     }),
   );
 
-  // 3. Unknown method → -32601 Method not found
   results.push(
     await probe(endpoint, 'rpc.methodNotFound', 'must', {
       title: 'Returns -32601 for unknown method',
@@ -132,7 +129,8 @@ export async function jsonRpcChecks(
     }),
   );
 
-  // 4. tasks/get with a bogus id → -32001 TaskNotFoundError (or -32602 Invalid params)
+  // Accept InvalidParams alongside TaskNotFoundError — some servers validate
+  // the id format before even looking it up.
   results.push(
     await probe(endpoint, 'rpc.tasksGet.notFound', 'should', {
       title: `${methods.get} returns TaskNotFoundError (-32001) for unknown task id`,
@@ -146,7 +144,8 @@ export async function jsonRpcChecks(
     }),
   );
 
-  // 5. tasks/resubscribe — same accepted set as tasks/get, plus UnsupportedOperation.
+  // Also accept UnsupportedOperation — resubscribe is genuinely optional per
+  // spec, and some implementations don't wire it up at all.
   results.push(
     await probe(endpoint, 'rpc.tasksResubscribe.notFound', 'should', {
       title: `${methods.resubscribe} returns TaskNotFoundError (-32001) for unknown task id`,
@@ -164,8 +163,8 @@ export async function jsonRpcChecks(
     }),
   );
 
-  // 6. tasks/cancel — bogus id should produce TaskNotFoundError, InvalidParams
-  //    or TaskNotCancelableError. Completes the core A2A method set.
+  // TaskNotCancelable is the variant when the server found the task but
+  // refused to cancel — also acceptable for a probe with a bogus id.
   results.push(
     await probe(endpoint, 'rpc.tasksCancel.notFound', 'should', {
       title: `${methods.cancel} rejects an unknown task id`,
