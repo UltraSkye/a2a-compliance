@@ -12,18 +12,21 @@ export type FailOn = 'any' | 'must' | 'never';
  * by emitting ANSI cursor-move + fake glyphs.
  */
 export function sanitizeForTerminal(s: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional.
   return (
     s
       // ESC [ ... CSI sequences (colours, cursor moves, clear)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: terminal-escape sequences ARE the target.
       .replace(/\u001b\[[0-9;?]*[@-~]/g, '')
       // ESC ] ... (OSC) sequences terminated by BEL or ST
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: terminal-escape sequences ARE the target.
       .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
       // Single-char ESC sequences (C1 controls)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: terminal-escape sequences ARE the target.
       .replace(/\u001b[@-Z\\-_]/g, '')
-      // Remaining C0 controls except HT (\t). CR/LF are collapsed to spaces
-      // so multi-line payloads don't reformat adjacent rows.
+      // CR/LF are collapsed to spaces so multi-line payloads don't reformat
+      // adjacent rows; remaining C0 controls except HT (\t) are stripped.
       .replace(/[\r\n]+/g, ' ')
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional C0/DEL stripping.
       .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
   );
 }
