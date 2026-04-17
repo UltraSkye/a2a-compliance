@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ComplianceReport } from './report.js';
-import { diffSnapshot, hasRegressions, toSnapshot } from './snapshot.js';
+import { diffSnapshot, hasRegressions, parseSnapshot, toSnapshot } from './snapshot.js';
 
 function makeReport(checks: Array<[string, 'pass' | 'fail' | 'warn' | 'skip']>): ComplianceReport {
   return {
@@ -61,6 +61,30 @@ describe('diffSnapshot', () => {
     const diff = diffSnapshot(base, now);
     expect(diff.regressions).toHaveLength(0);
     expect(diff.improvements).toHaveLength(0);
+  });
+
+  it('rejects malformed snapshot files via parseSnapshot', () => {
+    expect(parseSnapshot(null)).toBeNull();
+    expect(parseSnapshot({})).toBeNull();
+    expect(parseSnapshot({ version: 2, target: 'x', checks: {} })).toBeNull();
+    expect(
+      parseSnapshot({
+        version: 1,
+        target: 'x',
+        specVersion: '1',
+        capturedAt: 'x',
+        checks: { id: 'bogus' },
+      }),
+    ).toBeNull();
+    expect(
+      parseSnapshot({
+        version: 1,
+        target: 'x',
+        specVersion: '1',
+        capturedAt: 'x',
+        checks: { id: 'pass' },
+      }),
+    ).not.toBeNull();
   });
 
   it('tracks added and removed checks', () => {

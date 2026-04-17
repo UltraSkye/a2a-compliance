@@ -1,8 +1,9 @@
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
-import type { ComplianceReport, Snapshot, SnapshotDiff } from '@a2a-compliance/core';
+import type { ComplianceReport, SnapshotDiff } from '@a2a-compliance/core';
 import {
   diffSnapshot,
   hasRegressions,
+  parseSnapshot,
   runFullChecks,
   toBadgeSvg,
   toJUnitXml,
@@ -96,7 +97,18 @@ function compareSnapshot(report: ComplianceReport, path: string): SnapshotDiff {
     );
   }
   const raw = readFileSync(path, 'utf8');
-  const base = JSON.parse(raw) as Snapshot;
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`snapshot file ${path} is not valid JSON: ${(err as Error).message}`);
+  }
+  const base = parseSnapshot(data);
+  if (!base) {
+    throw new Error(
+      `snapshot file ${path} does not match the expected format (version: 1, target, checks, …)`,
+    );
+  }
   return diffSnapshot(base, report);
 }
 

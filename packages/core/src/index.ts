@@ -8,6 +8,8 @@ export type { Snapshot, SnapshotDiff, SnapshotDiffEntry } from './snapshot.js';
 export {
   diffSnapshot,
   hasRegressions,
+  parseSnapshot,
   SNAPSHOT_VERSION,
+  SnapshotSchema,
   toSnapshot,
 } from './snapshot.js';
