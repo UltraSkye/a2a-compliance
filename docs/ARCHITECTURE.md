@@ -63,11 +63,10 @@ Exit code policy (`--fail-on`):
 
 1. **Week 1** — Agent Card validator ✅ *shipped*
 2. **Week 2** — JSON-RPC envelope conformance + JUnit reporter ✅ *shipped*
-3. **Week 3** — Deeper protocol: `message/send` happy path, SSE
-   streaming sanity (`message/stream`, `tasks/resubscribe`), push
-   notification config round-trip.
+3. **Week 3** — `message/send` happy path + `message/stream` SSE sanity ✅ *shipped*
 4. **Week 4** — Security checks: SSRF / DNS rebinding probe, TLS cert
-   hygiene, OAuth discovery sanity, well-known header leaks.
+   hygiene, OAuth discovery sanity, well-known header leaks. Also:
+   `tasks/resubscribe`, push-notification config round-trip.
 5. **Week 5** — Next.js dashboard + GitHub Action wrapper.
 6. **Week 6** — DX polish: `init` command, snapshot/regression mode,
    versioned spec selector.
@@ -87,3 +86,15 @@ Exit code policy (`--fail-on`):
 | `rpc.invalidRequest` | must | JSON-RPC |
 | `rpc.methodNotFound` | must | JSON-RPC |
 | `rpc.tasksGet.notFound` | should | A2A method |
+| `rpc.messageSend.shape` | must | A2A method |
+| `rpc.messageStream.contentType` | should | A2A method (streaming) |
+
+### Handling "tolerated" errors
+
+`message/send` is inherently application-specific — a compliance probe can't
+know whether a given agent can meaningfully respond to `"ping"`. We accept
+the endpoint as compliant if it either (a) returns a schema-valid Task or
+Message, or (b) rejects our probe with a small whitelist of sensible error
+codes (`-32602`, `-32603`, `-32004`, `-32005`, `-32006`). Those cases are
+reported as **warn** rather than **fail**, so they don't break CI but still
+surface in the report.
