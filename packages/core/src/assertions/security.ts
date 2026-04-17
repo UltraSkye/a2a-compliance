@@ -1,6 +1,7 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now, readCappedJson } from '../http.js';
 import { ssrfCheckForUrl } from '../private-network.js';
+import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 
 // Re-export the helpers at their original locations so public consumers
@@ -51,7 +52,7 @@ export async function cardSsrfChecks(baseUrl: string): Promise<CheckResult[]> {
         title: 'Agent card fetched for security checks',
         severity: 'info',
         status: 'skip',
-        message: err instanceof Error ? err.message : String(err),
+        message: redactInText(err instanceof Error ? err.message : String(err)),
         durationMs: now() - t0,
       },
     ];

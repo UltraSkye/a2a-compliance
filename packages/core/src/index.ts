@@ -1,4 +1,5 @@
 export { ssrfCheckForUrl } from './assertions/security.js';
+export { redactInText, redactUrl } from './redact.js';
 export type { CheckResult, CheckStatus, ComplianceReport, Severity } from './report.js';
 export { toBadgeSvg } from './reporters/badge.js';
 export { toJUnitXml } from './reporters/junit.js';

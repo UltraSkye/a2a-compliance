@@ -7,6 +7,7 @@ import {
   pushNotificationChecks,
 } from './assertions/index.js';
 import { fetchWithTimeout, readCappedJson } from './http.js';
+import { redactUrl } from './redact.js';
 import type { CheckResult, ComplianceReport } from './report.js';
 import { summarize } from './report.js';
 import type { SpecVersion } from './spec.js';
@@ -27,7 +28,7 @@ export async function runCardChecks(
   const finishedAt = new Date().toISOString();
 
   return {
-    target: baseUrl,
+    target: redactUrl(baseUrl),
     specVersion: opts.specVersion ?? '1.0',
     startedAt,
     finishedAt,
@@ -78,7 +79,7 @@ export async function runFullChecks(
   const finishedAt = new Date().toISOString();
 
   return {
-    target: baseUrl,
+    target: redactUrl(baseUrl),
     specVersion: opts.specVersion ?? version,
     startedAt,
     finishedAt,
