@@ -9,6 +9,7 @@ interface RunOptions {
   junit?: string;
   failOn?: 'any' | 'must' | 'never';
   skipProtocol?: boolean;
+  skipSecurity?: boolean;
 }
 
 export function registerRunCommand(program: Command): void {
@@ -21,8 +22,12 @@ export function registerRunCommand(program: Command): void {
     .option('--junit <path>', 'also write a JUnit XML report to <path>')
     .option('--fail-on <mode>', 'exit non-zero on: any | must (default) | never', 'must')
     .option('--skip-protocol', 'skip live JSON-RPC checks (card-only run)')
+    .option('--skip-security', 'skip SSRF/TLS/CORS security checks')
     .action(async (url: string, opts: RunOptions) => {
-      const report = await runFullChecks(url, { skipProtocol: opts.skipProtocol === true });
+      const report = await runFullChecks(url, {
+        skipProtocol: opts.skipProtocol === true,
+        skipSecurity: opts.skipSecurity === true,
+      });
 
       if (opts.json) {
         console.log(JSON.stringify(report, null, 2));

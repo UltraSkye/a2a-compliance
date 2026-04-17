@@ -1,5 +1,10 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
-import { agentCardChecks, jsonRpcChecks, methodChecks } from './assertions/index.js';
+import {
+  agentCardChecks,
+  cardSsrfChecks,
+  jsonRpcChecks,
+  methodChecks,
+} from './assertions/index.js';
 import { fetchWithTimeout } from './http.js';
 import type { ComplianceReport } from './report.js';
 import { summarize } from './report.js';
@@ -9,6 +14,8 @@ export interface RunOptions {
   specVersion?: string;
   /** Skip live JSON-RPC probing. Default: false. */
   skipProtocol?: boolean;
+  /** Skip security checks (SSRF / TLS / CORS). Default: false. */
+  skipSecurity?: boolean;
 }
 
 export async function runCardChecks(
@@ -45,7 +52,8 @@ export async function runFullChecks(
   const protocolResults = rpcEndpoint
     ? [...(await jsonRpcChecks(rpcEndpoint)), ...(await methodChecks(rpcEndpoint))]
     : [];
-  const checks = [...cardResults, ...protocolResults];
+  const securityResults = opts.skipSecurity ? [] : await cardSsrfChecks(baseUrl);
+  const checks = [...cardResults, ...protocolResults, ...securityResults];
   const finishedAt = new Date().toISOString();
 
   return {
