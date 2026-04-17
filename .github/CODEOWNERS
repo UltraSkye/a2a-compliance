@@ -1,0 +1,10 @@
+# Default owner for anything under the repo. Update when the project
+# gains additional maintainers.
+*            @UltraSkye
+
+# Security-sensitive areas — require owner review before merge
+/packages/core/src/assertions/security.ts  @UltraSkye
+/packages/core/src/http.ts                 @UltraSkye
+/apps/web/app/api/                         @UltraSkye
+/SECURITY.md                               @UltraSkye
+/.github/workflows/release.yml             @UltraSkye

@@ -33,6 +33,29 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+      # Pre-flight: inspect what each tarball would actually contain.
+      # Catches accidents like missing LICENSE, leaked tests, wrong file list —
+      # before we get into irreversible publish calls.
+      - name: Preflight — inspect tarball contents
+        run: |
+          set -e
+          for pkg in schemas core cli; do
+            echo "::group::@a2a-compliance/$pkg pack contents"
+            (cd packages/$pkg && pnpm pack --pack-destination /tmp --dry-run)
+            echo "::endgroup::"
+          done
+          # Hard fail if anyone's tarball forgot LICENSE.
+          for pkg in schemas core cli; do
+            pnpm --filter @a2a-compliance/$pkg pack --pack-destination /tmp > /tmp/pack.log
+            tgz=$(ls /tmp/a2a-compliance-$pkg-*.tgz | head -1)
+            if ! tar tzf "$tgz" | grep -q 'package/LICENSE'; then
+              echo "::error::@a2a-compliance/$pkg tarball is missing LICENSE" && exit 1
+            fi
+            if tar tzf "$tgz" | grep -qE '\.test\.(js|d\.ts)$'; then
+              echo "::error::@a2a-compliance/$pkg tarball contains test artefacts" && exit 1
+            fi
+          done
+
       # Publish each workspace package that has publishConfig.access=public.
       # --no-git-checks lets pnpm publish from a tag commit without fighting
       # the dirty check; --provenance attaches an npm provenance statement.
