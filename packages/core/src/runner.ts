@@ -1,5 +1,5 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
-import { agentCardChecks, jsonRpcChecks } from './assertions/index.js';
+import { agentCardChecks, jsonRpcChecks, methodChecks } from './assertions/index.js';
 import { fetchWithTimeout } from './http.js';
 import type { ComplianceReport } from './report.js';
 import { summarize } from './report.js';
@@ -42,7 +42,9 @@ export async function runFullChecks(
   const cardResults = await agentCardChecks(baseUrl);
   const rpcEndpoint = opts.skipProtocol ? undefined : await discoverEndpoint(baseUrl);
 
-  const protocolResults = rpcEndpoint ? await jsonRpcChecks(rpcEndpoint) : [];
+  const protocolResults = rpcEndpoint
+    ? [...(await jsonRpcChecks(rpcEndpoint)), ...(await methodChecks(rpcEndpoint))]
+    : [];
   const checks = [...cardResults, ...protocolResults];
   const finishedAt = new Date().toISOString();
 
