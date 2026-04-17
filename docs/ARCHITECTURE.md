@@ -65,7 +65,7 @@ Exit code policy (`--fail-on`):
 2. **Week 2** — JSON-RPC envelope conformance + JUnit reporter ✅ *shipped*
 3. **Week 3** — `message/send` happy path + `message/stream` SSE sanity ✅ *shipped*
 4. **Week 4** — SSRF, HTTPS, CORS security checks ✅ *shipped*
-5. **Week 5** — Next.js dashboard + GitHub Action wrapper.
+5. **Week 5** — Next.js dashboard, GitHub Action, badge SVG ✅ *shipped*
 6. **Week 6** — DX polish: `init` command, snapshot/regression mode,
    versioned spec selector, `tasks/resubscribe`, push-notification config
    round-trip.

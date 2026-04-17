@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  packages:
+    name: packages (lint + typecheck + build + test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,3 +27,23 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
+
+  web:
+    name: web (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter=./packages/* build
+      - run: pnpm --filter @a2a-compliance/web typecheck
+      - run: pnpm --filter @a2a-compliance/web build
