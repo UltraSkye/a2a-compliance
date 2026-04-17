@@ -1,0 +1,30 @@
+{
+  "name": "a2a-compliance",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": true
+    }
+  },
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@10 --activate && pnpm install --frozen-lockfile",
+  "postStartCommand": "pnpm -r --filter=./packages/* build",
+  "forwardPorts": [3000, 8001, 8002, 8003],
+  "portsAttributes": {
+    "3000": { "label": "a2a-compliance dashboard", "onAutoForward": "notify" },
+    "8001": { "label": "mock-good agent" },
+    "8002": { "label": "mock-bad agent" },
+    "8003": { "label": "mock-broken agent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["biomejs.biome", "vitest.explorer", "ms-azuretools.vscode-docker"],
+      "settings": {
+        "editor.defaultFormatter": "biomejs.biome",
+        "editor.formatOnSave": true,
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  },
+  "remoteUser": "node"
+}
