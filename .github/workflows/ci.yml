@@ -29,6 +29,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      # Web typecheck folded into the main job so regressions fail fast
+      # in the Node-matrix run rather than the separate web job.
+      - run: pnpm --filter @a2a-compliance/web typecheck
       - run: pnpm build
       - run: pnpm test
       # Coverage thresholds per package are pinned in each package's
