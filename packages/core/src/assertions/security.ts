@@ -38,7 +38,89 @@ export function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
+/**
+ * Expand an IPv6 address string into its 16-byte representation, or
+ * undefined if the input isn't a syntactically valid IPv6. Supports the
+ * double-colon abbreviation and an embedded dotted IPv4 tail.
+ */
+function ipv6ToBytes(ip: string): number[] | undefined {
+  const addr = ip.toLowerCase().split('%')[0] ?? ''; // strip zone identifier
+  const halves = addr.split('::');
+  if (halves.length > 2) return undefined;
+
+  let head = (halves[0] ?? '').length > 0 ? (halves[0] ?? '').split(':') : [];
+  let tail =
+    halves.length === 2 && (halves[1] ?? '').length > 0 ? (halves[1] ?? '').split(':') : [];
+
+  // Dotted-IPv4 tail ("::ffff:127.0.0.1") — split it into two hex groups.
+  const last = tail.length > 0 ? tail[tail.length - 1] : head[head.length - 1];
+  if (last && /^\d{1,3}(?:\.\d{1,3}){3}$/.test(last)) {
+    const octets = last.split('.').map(Number);
+    if (octets.some((n) => n > 255)) return undefined;
+    const hi = (((octets[0] ?? 0) << 8) | (octets[1] ?? 0)).toString(16);
+    const lo = (((octets[2] ?? 0) << 8) | (octets[3] ?? 0)).toString(16);
+    if (tail.length > 0) {
+      tail = [...tail.slice(0, -1), hi, lo];
+    } else {
+      head = [...head.slice(0, -1), hi, lo];
+    }
+  }
+
+  const groups =
+    halves.length === 2
+      ? (() => {
+          const missing = 8 - head.length - tail.length;
+          if (missing < 0) return undefined;
+          return [...head, ...Array<string>(missing).fill('0'), ...tail];
+        })()
+      : head;
+  if (!groups || groups.length !== 8) return undefined;
+
+  const bytes: number[] = [];
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return undefined;
+    const n = Number.parseInt(g, 16);
+    bytes.push((n >> 8) & 0xff, n & 0xff);
+  }
+  return bytes;
+}
+
+/**
+ * If the address embeds an IPv4 in a form that routes back to v4 — IPv4-mapped
+ * (::ffff:a.b.c.d), deprecated IPv4-compat (::a.b.c.d), or the well-known NAT64
+ * prefix (64:ff9b::a.b.c.d per RFC 6052) — return that v4 as dotted-decimal.
+ * Accepts canonical, hex-group, and fully-expanded representations alike.
+ *
+ * Without this step an attacker DNS record resolving to e.g.
+ * `::ffff:127.0.0.1` or its hex twin `::ffff:7f00:1` reaches the IPv6-prefix
+ * classifier, which doesn't recognise it as loopback and lets the SSRF probe
+ * through.
+ */
+export function normalizeV6ToV4(ip: string): string {
+  const bytes = ipv6ToBytes(ip);
+  if (!bytes) return ip;
+
+  const mapped =
+    bytes.slice(0, 10).every((b) => b === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
+  const compat = bytes.slice(0, 12).every((b) => b === 0);
+  const nat64 =
+    bytes[0] === 0x00 &&
+    bytes[1] === 0x64 &&
+    bytes[2] === 0xff &&
+    bytes[3] === 0x9b &&
+    bytes.slice(4, 12).every((b) => b === 0);
+
+  if (mapped || compat || nat64) {
+    return `${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`;
+  }
+  return ip;
+}
+
 export function isPrivateIPv6(ip: string): boolean {
+  // First: unwrap IPv4-mapped / compat / NAT64 and defer to v4 classifier.
+  const maybeV4 = normalizeV6ToV4(ip);
+  if (isIP(maybeV4) === 4) return isPrivateIPv4(maybeV4);
+
   const lower = ip.toLowerCase();
   if (lower === '::1') return true; // loopback
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // ULA
@@ -65,13 +147,20 @@ export async function ssrfCheckForUrl(rawUrl: string): Promise<{ ok: boolean; re
     return { ok: false, reason: `not a valid URL: ${rawUrl}` };
   }
 
-  if (isIP(url.hostname)) {
-    const v = isIP(url.hostname);
-    if (v === 4 && isPrivateIPv4(url.hostname)) {
-      return { ok: false, reason: `literal IP ${url.hostname} is in a private range` };
+  // Node's URL keeps brackets around literal IPv6 hostnames; isIP needs them
+  // stripped to recognise the address.
+  const host =
+    url.hostname.startsWith('[') && url.hostname.endsWith(']')
+      ? url.hostname.slice(1, -1)
+      : url.hostname;
+
+  if (isIP(host)) {
+    const v = isIP(host);
+    if (v === 4 && isPrivateIPv4(host)) {
+      return { ok: false, reason: `literal IP ${host} is in a private range` };
     }
-    if (v === 6 && isPrivateIPv6(url.hostname)) {
-      return { ok: false, reason: `literal IPv6 ${url.hostname} is in a private range` };
+    if (v === 6 && isPrivateIPv6(host)) {
+      return { ok: false, reason: `literal IPv6 ${host} is in a private range` };
     }
     return { ok: true };
   }

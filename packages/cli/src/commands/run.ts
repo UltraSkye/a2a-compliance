@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import type { ComplianceReport, Snapshot, SnapshotDiff } from '@a2a-compliance/core';
 import {
   diffSnapshot,
@@ -83,7 +83,18 @@ export function registerRunCommand(program: Command): void {
     });
 }
 
+// Snapshots are keyed by check id; real ones are a few hundred bytes. Cap at
+// 4 MB so an operator who passes --snapshot to a huge or malicious JSON file
+// gets a clear error instead of an OOM.
+const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
+
 function compareSnapshot(report: ComplianceReport, path: string): SnapshotDiff {
+  const stats = statSync(path);
+  if (stats.size > MAX_SNAPSHOT_BYTES) {
+    throw new Error(
+      `snapshot file ${path} is ${stats.size} bytes, above the ${MAX_SNAPSHOT_BYTES}-byte cap`,
+    );
+  }
   const raw = readFileSync(path, 'utf8');
   const base = JSON.parse(raw) as Snapshot;
   return diffSnapshot(base, report);
