@@ -33,10 +33,11 @@ describe('jsonRpcChecks', () => {
       { jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'Method not found' } },
       { jsonrpc: '2.0', id: 2, error: { code: -32001, message: 'Task not found' } },
       { jsonrpc: '2.0', id: 3, error: { code: -32001, message: 'Task not found' } },
+      { jsonrpc: '2.0', id: 4, error: { code: -32002, message: 'Not cancelable' } },
     ]);
 
     const results = await jsonRpcChecks(ENDPOINT, METHODS);
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(6);
     expect(results.every((r) => r.status === 'pass')).toBe(true);
   });
 

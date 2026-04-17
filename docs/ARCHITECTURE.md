@@ -119,6 +119,7 @@ suppresses the hard exit for CI integrations that just want diff output.
 | `rpc.messageSend.shape` | must | A2A method |
 | `rpc.messageStream.contentType` | should | A2A method (streaming) |
 | `rpc.tasksResubscribe.notFound` | should | A2A method |
+| `rpc.tasksCancel.notFound` | should | A2A method |
 | `rpc.pushNotifications.capability` | info | A2A method (skip marker) |
 | `rpc.pushNotifications.set` | should | A2A method (capability-gated) |
 | `rpc.pushNotifications.get` | should | A2A method (capability-gated) |
