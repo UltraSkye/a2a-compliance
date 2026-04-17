@@ -77,13 +77,38 @@ outputs.
 ### Interactive dashboard
 
 A Next.js app lives in `apps/web`. Paste a URL into the form and get the
-same report the CLI produces:
+same report the CLI produces.
+
+Run locally with pnpm:
 
 ```bash
 pnpm -r --filter=./packages/* build   # core/schemas/cli must be built once
 pnpm --filter @a2a-compliance/web dev
 # → http://localhost:3000
 ```
+
+Or run in Docker — a multi-stage Dockerfile ships with the repo, using
+Next.js standalone output for a ~400 MB image:
+
+```bash
+# One-shot: build & run via docker compose
+docker compose up -d
+# → http://localhost:3000   (override with A2A_PORT=8080 docker compose up -d)
+
+docker compose down
+```
+
+Or build the image directly:
+
+```bash
+docker build -f apps/web/Dockerfile -t a2a-compliance-web .
+docker run --rm -p 3000:3000 a2a-compliance-web
+```
+
+The hosted dashboard refuses to probe private-space URLs (loopback,
+RFC 1918, link-local, cloud metadata, localhost) so the container
+cannot be weaponised into a local-network SSRF proxy by anonymous
+callers.
 
 Exit code policy is controlled by `--fail-on`:
 

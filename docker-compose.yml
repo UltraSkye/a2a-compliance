@@ -1,0 +1,12 @@
+services:
+  web:
+    image: a2a-compliance-web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "${A2A_PORT:-3000}:3000"
+    restart: unless-stopped
+    # The dashboard runs outbound probes against user-supplied URLs.
+    # Keep it on the default bridge network so the container cannot
+    # reach host-local services unless explicitly exposed.
