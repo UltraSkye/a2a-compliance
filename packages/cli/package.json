@@ -1,6 +1,6 @@
 {
   "name": "@a2a-compliance/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "CLI for running A2A protocol compliance tests against agent endpoints",
   "keywords": [
     "a2a",
@@ -28,7 +28,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",

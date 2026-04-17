@@ -1,6 +1,6 @@
 {
   "name": "@a2a-compliance/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Assertion engine and reporters (JSON, JUnit, badge SVG) for A2A protocol compliance testing",
   "keywords": [
     "a2a",
@@ -32,7 +32,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
