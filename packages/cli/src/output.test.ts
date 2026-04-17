@@ -1,6 +1,6 @@
 import type { CheckResult } from '@a2a-compliance/core';
-import { describe, expect, it } from 'vitest';
-import { decideExit, sanitizeForTerminal } from './output.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { decideExit, printHuman, sanitizeForTerminal } from './output.js';
 
 function chk(
   status: CheckResult['status'],
@@ -38,6 +38,55 @@ describe('sanitizeForTerminal', () => {
 
   it('preserves tab within a line', () => {
     expect(sanitizeForTerminal('col1\tcol2')).toBe('col1\tcol2');
+  });
+});
+
+describe('printHuman', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function captureLog(): () => string[] {
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...args) => {
+      lines.push(args.join(' '));
+    });
+    return () => lines;
+  }
+
+  it('renders each check with its status icon, severity and title', () => {
+    const lines = captureLog();
+    printHuman('https://agent.example.com', [
+      chk('pass'),
+      chk('fail', 'should'),
+      chk('warn', 'info'),
+      chk('skip', 'info'),
+    ]);
+    const out = lines().join('\n');
+    expect(out).toContain('https://agent.example.com');
+    expect(out).toMatch(/\[MUST\]/);
+    expect(out).toMatch(/\[SHOULD\]/);
+    expect(out).toMatch(/\[INFO\]/);
+    expect(out).toMatch(/1 passed/);
+    expect(out).toMatch(/1 failed/);
+    expect(out).toMatch(/1 warnings/);
+  });
+
+  it('prints the check message on its own indented line when present', () => {
+    const lines = captureLog();
+    printHuman('x', [{ ...chk('fail'), message: 'agent down' }]);
+    const out = lines().join('\n');
+    expect(out).toMatch(/agent down/);
+  });
+
+  it('sanitises ANSI / control chars in target and title before printing', () => {
+    const lines = captureLog();
+    printHuman('https://evil\u001b[2J.com', [
+      { ...chk('pass'), title: '\u001b[31mhacked\u001b[0m' },
+    ]);
+    const out = lines().join('\n');
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: testing ANSI strip.
+    expect(out).not.toMatch(/\u001b\[2J/);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: testing ANSI strip.
+    expect(out).not.toMatch(/\u001b\[31m/);
   });
 });
 

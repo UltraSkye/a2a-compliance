@@ -40,6 +40,25 @@ describe('toJUnitXml', () => {
     expect(xml).toContain('<warning message=""');
   });
 
+  it('emits <skipped/> for skip-status checks', () => {
+    const report: ComplianceReport = {
+      ...baseReport,
+      checks: [
+        {
+          id: 'sec.card.fetch',
+          title: 'skipped because card unreachable',
+          severity: 'info',
+          status: 'skip',
+          durationMs: 0,
+        },
+      ],
+      summary: { total: 1, pass: 0, fail: 0, warn: 0, skip: 1 },
+    };
+    const xml = toJUnitXml(report);
+    expect(xml).toContain('<skipped/>');
+    expect(xml).toContain('skipped="1"');
+  });
+
   it('escapes XML special characters in attributes', () => {
     const report: ComplianceReport = {
       ...baseReport,
@@ -70,7 +89,6 @@ describe('toJUnitXml', () => {
           title: 'with\u0000null\u0001and\ttab',
           severity: 'must',
           status: 'fail',
-          // Classic XML-injection payload smuggled via \r\n in a message.
           message: 'line1\r\nline2 <injected>" type="custom',
           durationMs: 0,
         },
@@ -78,14 +96,9 @@ describe('toJUnitXml', () => {
       summary: { total: 1, pass: 0, fail: 1, warn: 0, skip: 0 },
     };
     const xml = toJUnitXml(report);
-
-    // No raw control characters in the output (except the single newlines
-    // the renderer itself emits between elements).
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: testing that stripping works.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional assertion.
     expect(xml).not.toMatch(/[\u0000\u0001]/);
-    // The attempt to break out of the attribute must be escaped.
     expect(xml).toContain('&lt;injected&gt;&quot;');
-    // CRLF is normalised to spaces.
     expect(xml).not.toContain('line1\r');
     expect(xml).not.toContain('line1\n');
     expect(xml).toMatch(/line1\s+line2/);

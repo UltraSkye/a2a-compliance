@@ -7,7 +7,6 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const cardUrl = new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString();
 
-  // Check 1: agent card reachable at well-known path
   const t0 = now();
   let res: Response | undefined;
   try {
@@ -34,7 +33,6 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
 
   if (!res.ok) return results;
 
-  // Check 2: response is valid JSON (and within size cap)
   const t1 = now();
   let body: unknown;
   try {
@@ -58,7 +56,6 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
     return results;
   }
 
-  // Check 3: agent card matches schema
   const t2 = now();
   const parsed = AgentCardSchema.safeParse(body);
   results.push({
@@ -75,7 +72,6 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
     durationMs: now() - t2,
   });
 
-  // Check 4: content-type header is application/json
   const ct = res.headers.get('content-type') ?? '';
   const ctOk = ct.toLowerCase().includes('application/json');
   results.push({
@@ -87,7 +83,8 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
     durationMs: 0,
   });
 
-  // Checks 5 & 6: only if schema parsed
+  // Only run the url/skills deep checks when the schema parsed — they'd
+  // produce redundant noise on a card that already failed card.schema.
   if (parsed.success) {
     const card = parsed.data;
     let urlOk = false;
