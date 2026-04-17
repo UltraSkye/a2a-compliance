@@ -3,12 +3,11 @@
   "description": "Schema-valid demo agent card served over the mock nginx fixture",
   "url": "https://agent.example.com/a2a",
   "version": "1.0.0",
+  "protocolVersion": "1.0",
   "provider": { "organization": "Example Inc.", "url": "https://example.com" },
   "capabilities": { "streaming": true, "pushNotifications": false },
   "authentication": { "schemes": ["bearer"] },
   "defaultInputModes": ["text"],
   "defaultOutputModes": ["text"],
-  "skills": [
-    { "id": "echo", "name": "Echo", "description": "Echoes input", "tags": ["utility"] }
-  ]
+  "skills": [{ "id": "echo", "name": "Echo", "description": "Echoes input", "tags": ["utility"] }]
 }

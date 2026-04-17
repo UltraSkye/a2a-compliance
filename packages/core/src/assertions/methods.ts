@@ -8,27 +8,39 @@ import {
 } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now } from '../http.js';
 import type { CheckResult } from '../report.js';
+import type { SpecMethods } from '../spec.js';
 
-// Error codes we tolerate from message/send during a compliance probe.
+// Error codes we tolerate from the "send" method during a compliance probe.
 // Agents without a text skill may legitimately reject our probe payload;
 // the point of this check is that the endpoint accepts the request shape
 // and returns a well-formed response, not that business logic succeeds.
 const TOLERATED_SEND_ERROR_CODES: number[] = [
-  JsonRpcErrorCode.InvalidParams, // -32602 — agent doesn't like our minimal payload
-  JsonRpcErrorCode.InternalError, // -32603 — agent runtime error
-  -32005, // ContentTypeNotSupportedError
-  -32004, // UnsupportedOperationError
-  -32006, // InvalidAgentResponseError
+  JsonRpcErrorCode.InvalidParams,
+  JsonRpcErrorCode.InternalError,
+  -32005,
+  -32004,
+  -32006,
 ];
 
-export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
-  const t0 = now();
+function sendParams(methodName: string): Record<string, unknown> {
+  // v0.3's tasks/send expects {id, message}; v1.0's message/send expects {message}.
+  // Both accept our probe message; the v0.3 agent will just ignore extra fields.
   const probe = makeProbeMessage('ping from a2a-compliance');
+  return methodName === 'tasks/send'
+    ? { id: 'compliance-probe-task-id-00000000', message: probe }
+    : { message: probe };
+}
+
+export async function messageSendCheck(
+  endpoint: string,
+  methods: SpecMethods,
+): Promise<CheckResult> {
+  const t0 = now();
   const body = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
-    method: 'message/send',
-    params: { message: probe },
+    method: methods.send,
+    params: sendParams(methods.send),
   });
 
   try {
@@ -45,7 +57,7 @@ export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
     } catch {
       return fail(
         'rpc.messageSend.shape',
-        'message/send returns a valid JSON-RPC response',
+        `${methods.send} returns a valid JSON-RPC response`,
         `response body is not JSON (HTTP ${res.status})`,
         t0,
       );
@@ -55,7 +67,7 @@ export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
     if (!parsed.success) {
       return fail(
         'rpc.messageSend.shape',
-        'message/send returns a valid JSON-RPC response',
+        `${methods.send} returns a valid JSON-RPC response`,
         'response is not a valid JSON-RPC 2.0 envelope',
         t0,
         parsed.error.issues,
@@ -67,7 +79,7 @@ export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
       const toleratedOk = TOLERATED_SEND_ERROR_CODES.includes(code);
       return {
         id: 'rpc.messageSend.shape',
-        title: 'message/send returns a valid JSON-RPC response',
+        title: `${methods.send} returns a valid JSON-RPC response`,
         severity: 'must',
         status: toleratedOk ? 'warn' : 'fail',
         message: toleratedOk
@@ -77,13 +89,12 @@ export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
       };
     }
 
-    // Success: result must be a Task or a Message (spec v1.0 allows either).
     const asTask = TaskSchema.safeParse(parsed.data.result);
     const asMessage = MessageSchema.safeParse(parsed.data.result);
     if (asTask.success || asMessage.success) {
       return {
         id: 'rpc.messageSend.shape',
-        title: 'message/send returns a valid JSON-RPC response',
+        title: `${methods.send} returns a valid JSON-RPC response`,
         severity: 'must',
         status: 'pass',
         durationMs: now() - t0,
@@ -92,7 +103,7 @@ export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
 
     return fail(
       'rpc.messageSend.shape',
-      'message/send returns a valid JSON-RPC response',
+      `${methods.send} returns a valid JSON-RPC response`,
       'result is neither a valid Task nor a Message',
       t0,
       { taskIssues: asTask.error?.issues, messageIssues: asMessage.error?.issues },
@@ -100,52 +111,43 @@ export async function messageSendCheck(endpoint: string): Promise<CheckResult> {
   } catch (err) {
     return fail(
       'rpc.messageSend.shape',
-      'message/send returns a valid JSON-RPC response',
+      `${methods.send} returns a valid JSON-RPC response`,
       err instanceof Error ? err.message : String(err),
       t0,
     );
   }
 }
 
-/**
- * Probe message/stream and check that the server advertises an SSE stream
- * (Content-Type: text/event-stream). Full frame parsing is deferred — this
- * check catches the common failure mode where servers accept the method but
- * return plain JSON instead of SSE.
- */
-export async function messageStreamContentTypeCheck(endpoint: string): Promise<CheckResult> {
+export async function messageStreamContentTypeCheck(
+  endpoint: string,
+  methods: SpecMethods,
+): Promise<CheckResult> {
   const t0 = now();
-  const probe = makeProbeMessage('ping from a2a-compliance (stream)');
   const body = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
-    method: 'message/stream',
-    params: { message: probe },
+    method: methods.stream,
+    params: sendParams(methods.send),
   });
 
   try {
     const res = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body,
     });
 
     const ct = res.headers.get('content-type') ?? '';
     const isSse = ct.toLowerCase().includes('text/event-stream');
 
-    // We also allow JSON-RPC error responses (e.g. streaming not supported).
     if (!isSse) {
-      // If it's JSON, see if it's a tolerable error.
       let json: unknown;
       try {
         json = JSON.parse(await res.text());
       } catch {
         return fail(
           'rpc.messageStream.contentType',
-          'message/stream responds with text/event-stream',
+          `${methods.stream} responds with text/event-stream`,
           `got Content-Type: ${ct || '(none)'} and non-JSON body`,
           t0,
         );
@@ -154,7 +156,7 @@ export async function messageStreamContentTypeCheck(endpoint: string): Promise<C
       if (parsed.success && isErrorResponse(parsed.data)) {
         return {
           id: 'rpc.messageStream.contentType',
-          title: 'message/stream responds with text/event-stream',
+          title: `${methods.stream} responds with text/event-stream`,
           severity: 'should',
           status: 'warn',
           message: `server returned JSON-RPC error ${parsed.data.error.code} instead of SSE — streaming may not be supported`,
@@ -163,22 +165,21 @@ export async function messageStreamContentTypeCheck(endpoint: string): Promise<C
       }
       return fail(
         'rpc.messageStream.contentType',
-        'message/stream responds with text/event-stream',
+        `${methods.stream} responds with text/event-stream`,
         `got Content-Type: ${ct || '(none)'}`,
         t0,
       );
     }
 
-    // Cancel the stream — we don't need to drain it for this check.
     try {
       await res.body?.cancel();
     } catch {
-      // Ignore.
+      // Ignore — stream wasn't consumable.
     }
 
     return {
       id: 'rpc.messageStream.contentType',
-      title: 'message/stream responds with text/event-stream',
+      title: `${methods.stream} responds with text/event-stream`,
       severity: 'should',
       status: 'pass',
       durationMs: now() - t0,
@@ -186,15 +187,18 @@ export async function messageStreamContentTypeCheck(endpoint: string): Promise<C
   } catch (err) {
     return fail(
       'rpc.messageStream.contentType',
-      'message/stream responds with text/event-stream',
+      `${methods.stream} responds with text/event-stream`,
       err instanceof Error ? err.message : String(err),
       t0,
     );
   }
 }
 
-export async function methodChecks(endpoint: string): Promise<CheckResult[]> {
-  return [await messageSendCheck(endpoint), await messageStreamContentTypeCheck(endpoint)];
+export async function methodChecks(endpoint: string, methods: SpecMethods): Promise<CheckResult[]> {
+  return [
+    await messageSendCheck(endpoint, methods),
+    await messageStreamContentTypeCheck(endpoint, methods),
+  ];
 }
 
 function fail(
