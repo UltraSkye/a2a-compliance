@@ -1,0 +1,31 @@
+{
+  "name": "@a2a-compliance/cli",
+  "version": "0.0.0",
+  "description": "CLI for A2A protocol compliance testing",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "a2a-compliance": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@a2a-compliance/core": "workspace:*",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
