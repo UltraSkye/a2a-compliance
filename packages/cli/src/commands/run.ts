@@ -1,4 +1,5 @@
-import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import type { ComplianceReport, SnapshotDiff } from '@a2a-compliance/core';
 import {
   diffSnapshot,
@@ -62,19 +63,15 @@ export function registerRunCommand(program: Command): void {
         if (diff) printDiff(diff);
       }
 
-      if (opts.junit) {
-        writeFileSync(opts.junit, toJUnitXml(report), 'utf8');
-        if (!opts.json) console.log(pc.dim(`  JUnit report written to ${opts.junit}`));
-      }
-
-      if (opts.badge) {
-        writeFileSync(opts.badge, toBadgeSvg(report), 'utf8');
-        if (!opts.json) console.log(pc.dim(`  Badge SVG written to ${opts.badge}`));
-      }
-
+      if (opts.junit) writeArtefact('JUnit report', opts.junit, toJUnitXml(report), opts.json);
+      if (opts.badge) writeArtefact('Badge SVG', opts.badge, toBadgeSvg(report), opts.json);
       if (opts.snapshotOut) {
-        writeFileSync(opts.snapshotOut, JSON.stringify(toSnapshot(report), null, 2), 'utf8');
-        if (!opts.json) console.log(pc.dim(`  Snapshot written to ${opts.snapshotOut}`));
+        writeArtefact(
+          'Snapshot',
+          opts.snapshotOut,
+          JSON.stringify(toSnapshot(report), null, 2),
+          opts.json,
+        );
       }
 
       const mode = opts.failOn ?? 'must';
@@ -88,6 +85,26 @@ export function registerRunCommand(program: Command): void {
 // 4 MB so an operator who passes --snapshot to a huge or malicious JSON file
 // gets a clear error instead of an OOM.
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
+
+// mkdir -p the parent of `path`, then write `contents`. Translates the
+// common ENOENT/EACCES stack traces into one-line errors that point at
+// exactly which artefact failed — the alternative is the probe running
+// to completion and only then crashing with a raw Node trace.
+function writeArtefact(
+  label: string,
+  path: string,
+  contents: string,
+  json: boolean | undefined,
+): void {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, contents, 'utf8');
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`failed to write ${label} to ${path}: ${msg}`);
+  }
+  if (!json) console.log(pc.dim(`  ${label} written to ${path}`));
+}
 
 function compareSnapshot(report: ComplianceReport, path: string): SnapshotDiff {
   let stats: ReturnType<typeof statSync>;
