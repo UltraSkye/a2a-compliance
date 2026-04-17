@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { methodsFor } from '../spec.js';
 import { messageSendCheck, messageStreamContentTypeCheck } from './methods.js';
 
 const ENDPOINT = 'https://agent.example.com/a2a';
+const METHODS = methodsFor('1.0');
 
 function mockJson(status: number, body: unknown): void {
   vi.stubGlobal(
@@ -41,7 +43,7 @@ describe('messageSendCheck', () => {
       id: 1,
       result: { id: 'task-1', status: { state: 'submitted' } },
     });
-    const r = await messageSendCheck(ENDPOINT);
+    const r = await messageSendCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('pass');
   });
 
@@ -55,7 +57,7 @@ describe('messageSendCheck', () => {
         messageId: 'm-1',
       },
     });
-    const r = await messageSendCheck(ENDPOINT);
+    const r = await messageSendCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('pass');
   });
 
@@ -65,7 +67,7 @@ describe('messageSendCheck', () => {
       id: 1,
       error: { code: -32602, message: 'Invalid params' },
     });
-    const r = await messageSendCheck(ENDPOINT);
+    const r = await messageSendCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('warn');
     expect(r.message).toMatch(/-32602|tolerated/);
   });
@@ -76,7 +78,7 @@ describe('messageSendCheck', () => {
       id: 1,
       error: { code: -32601, message: 'Method not found' },
     });
-    const r = await messageSendCheck(ENDPOINT);
+    const r = await messageSendCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('fail');
     expect(r.message).toMatch(/unexpected/);
   });
@@ -87,7 +89,7 @@ describe('messageSendCheck', () => {
       id: 1,
       result: { nonsense: true },
     });
-    const r = await messageSendCheck(ENDPOINT);
+    const r = await messageSendCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('fail');
     expect(r.message).toMatch(/neither/);
   });
@@ -96,7 +98,7 @@ describe('messageSendCheck', () => {
 describe('messageStreamContentTypeCheck', () => {
   it('passes when server responds with text/event-stream', async () => {
     mockSse();
-    const r = await messageStreamContentTypeCheck(ENDPOINT);
+    const r = await messageStreamContentTypeCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('pass');
   });
 
@@ -106,13 +108,13 @@ describe('messageStreamContentTypeCheck', () => {
       id: 1,
       error: { code: -32004, message: 'streaming not supported' },
     });
-    const r = await messageStreamContentTypeCheck(ENDPOINT);
+    const r = await messageStreamContentTypeCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('warn');
   });
 
   it('fails when Content-Type is plain JSON with success body', async () => {
     mockJson(200, { jsonrpc: '2.0', id: 1, result: {} });
-    const r = await messageStreamContentTypeCheck(ENDPOINT);
+    const r = await messageStreamContentTypeCheck(ENDPOINT, METHODS);
     expect(r.status).toBe('fail');
   });
 });

@@ -115,6 +115,7 @@ suppresses the hard exit for CI integrations that just want diff output.
 | `rpc.invalidRequest` | must | JSON-RPC |
 | `rpc.methodNotFound` | must | JSON-RPC |
 | `rpc.tasksGet.notFound` | should | A2A method |
+| `card.protocolVersion` | should | Spec compatibility |
 | `rpc.messageSend.shape` | must | A2A method |
 | `rpc.messageStream.contentType` | should | A2A method (streaming) |
 | `rpc.tasksResubscribe.notFound` | should | A2A method |
@@ -152,3 +153,29 @@ The CORS check flags the specific browser-spec violation of
 
 All security checks are skippable via `--skip-security`; the runner
 otherwise includes them in every full run.
+
+### Spec-version adaptation
+
+A2A v0.3 and v1.0 renamed the core methods
+(`tasks/send` → `message/send`, `tasks/sendSubscribe` → `message/stream`,
+`tasks/pushNotification/*` → `tasks/pushNotificationConfig/*`). Probing
+a v0.3 agent with v1.0 method names would produce false negatives —
+every method probe would fail with `-32601 Method not found`.
+
+The runner reads `protocolVersion` from the agent card during discovery
+and picks the method name set from `packages/core/src/spec.ts`. Current
+map:
+
+| key | v0.3 | v1.0 |
+|-----|------|------|
+| send | `tasks/send` | `message/send` |
+| stream | `tasks/sendSubscribe` | `message/stream` |
+| get | `tasks/get` | `tasks/get` |
+| cancel | `tasks/cancel` | `tasks/cancel` |
+| resubscribe | `tasks/resubscribe` | `tasks/resubscribe` |
+| pushSet | `tasks/pushNotification/set` | `tasks/pushNotificationConfig/set` |
+| pushGet | `tasks/pushNotification/get` | `tasks/pushNotificationConfig/get` |
+
+When the card omits `protocolVersion` or declares a version outside this
+set, the `card.protocolVersion` check emits a SHOULD-level warn and the
+runner falls back to v1.0 method names.

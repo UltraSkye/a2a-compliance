@@ -42,6 +42,9 @@ export const AgentCardSchema = z.object({
   url: z.string().url(),
   provider: AgentProviderSchema.optional(),
   version: z.string().min(1),
+  // Spec version (Agent2Agent protocol). Present from v0.3 onward. Missing
+  // on very old or hand-rolled cards — treat as unknown.
+  protocolVersion: z.string().optional(),
   documentationUrl: z.string().url().optional(),
   capabilities: AgentCapabilitiesSchema,
   authentication: AgentAuthenticationSchema.optional(),

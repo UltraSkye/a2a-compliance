@@ -6,13 +6,13 @@ import {
 } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now } from '../http.js';
 import type { CheckResult } from '../report.js';
+import type { SpecMethods } from '../spec.js';
 
 interface RpcProbe {
   title: string;
   body: string;
   contentType?: string;
   expectedErrorCode?: number;
-  /** If true, allow multiple error codes to satisfy the assertion. */
   acceptableErrorCodes?: number[];
 }
 
@@ -53,7 +53,7 @@ async function probe(
         title: p.title,
         severity,
         status: 'fail',
-        message: `response is not a valid JSON-RPC 2.0 envelope`,
+        message: 'response is not a valid JSON-RPC 2.0 envelope',
         evidence: parsed.error.issues,
         durationMs: now() - t0,
       };
@@ -94,7 +94,10 @@ async function probe(
   }
 }
 
-export async function jsonRpcChecks(endpoint: string): Promise<CheckResult[]> {
+export async function jsonRpcChecks(
+  endpoint: string,
+  methods: SpecMethods,
+): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
   // 1. Invalid JSON body → -32700 Parse error
@@ -131,25 +134,25 @@ export async function jsonRpcChecks(endpoint: string): Promise<CheckResult[]> {
   // 4. tasks/get with a bogus id → -32001 TaskNotFoundError (or -32602 Invalid params)
   results.push(
     await probe(endpoint, 'rpc.tasksGet.notFound', 'should', {
-      title: 'tasks/get returns TaskNotFoundError (-32001) for unknown task id',
+      title: `${methods.get} returns TaskNotFoundError (-32001) for unknown task id`,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 2,
-        method: 'tasks/get',
+        method: methods.get,
         params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
       }),
       acceptableErrorCodes: [A2AErrorCode.TaskNotFoundError, JsonRpcErrorCode.InvalidParams],
     }),
   );
 
-  // 5. tasks/resubscribe with a bogus id — same accepted set as tasks/get.
+  // 5. tasks/resubscribe — same accepted set as tasks/get, plus UnsupportedOperation.
   results.push(
     await probe(endpoint, 'rpc.tasksResubscribe.notFound', 'should', {
-      title: 'tasks/resubscribe returns TaskNotFoundError (-32001) for unknown task id',
+      title: `${methods.resubscribe} returns TaskNotFoundError (-32001) for unknown task id`,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 3,
-        method: 'tasks/resubscribe',
+        method: methods.resubscribe,
         params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
       }),
       acceptableErrorCodes: [

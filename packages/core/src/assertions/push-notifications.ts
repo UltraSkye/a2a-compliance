@@ -8,12 +8,7 @@ import {
 } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now } from '../http.js';
 import type { CheckResult } from '../report.js';
-
-// The push-notifications capability is optional per spec. When the Agent
-// Card declares `capabilities.pushNotifications === true`, the server must
-// implement set/get of the config. We verify the methods exist and respond
-// well-formed to a probe with a bogus task id; a TaskNotFound (-32001) or
-// an InvalidParams (-32602) is the expected answer.
+import type { SpecMethods } from '../spec.js';
 
 const ACCEPTABLE_ERROR_CODES: number[] = [
   A2AErrorCode.TaskNotFoundError,
@@ -79,8 +74,6 @@ async function probePush(
       };
     }
     if (!isErrorResponse(parsed.data)) {
-      // A success result means the server somehow processed our probe. Treat
-      // as pass — nothing crashed.
       return { id, title, severity: 'should', status: 'pass', durationMs: now() - t0 };
     }
     const code = parsed.data.error.code;
@@ -108,6 +101,7 @@ async function probePush(
 export async function pushNotificationChecks(
   baseUrl: string,
   endpoint: string,
+  methods: SpecMethods,
 ): Promise<CheckResult[]> {
   if (!(await capabilityDeclared(baseUrl))) {
     return [
@@ -124,14 +118,14 @@ export async function pushNotificationChecks(
     await probePush(
       endpoint,
       'rpc.pushNotifications.set',
-      'tasks/pushNotificationConfig/set responds with a well-formed error',
-      'tasks/pushNotificationConfig/set',
+      `${methods.pushSet} responds with a well-formed error`,
+      methods.pushSet,
     ),
     await probePush(
       endpoint,
       'rpc.pushNotifications.get',
-      'tasks/pushNotificationConfig/get responds with a well-formed error',
-      'tasks/pushNotificationConfig/get',
+      `${methods.pushGet} responds with a well-formed error`,
+      methods.pushGet,
     ),
   ];
 }
