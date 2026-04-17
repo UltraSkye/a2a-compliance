@@ -119,11 +119,20 @@ suppresses the hard exit for CI integrations that just want diff output.
 | `rpc.messageSend.shape` | must | A2A method |
 | `rpc.messageStream.contentType` | should | A2A method (streaming) |
 | `rpc.tasksResubscribe.notFound` | should | A2A method |
+| `rpc.pushNotifications.capability` | info | A2A method (skip marker) |
 | `rpc.pushNotifications.set` | should | A2A method (capability-gated) |
 | `rpc.pushNotifications.get` | should | A2A method (capability-gated) |
+| `sec.card.fetch` | info | Security (skip marker) |
 | `sec.tls.https` | must | Security / Transport |
 | `sec.ssrf` | must | Security / SSRF |
 | `sec.cors.wildcardWithCreds` | must | Security / CORS |
+
+The two `info`-level rows above are *skip markers* rather than
+compliance assertions. They appear only when the runner intentionally
+skips a block of checks — for example, `sec.card.fetch` emits `skip`
+with a human-readable reason when the agent card itself isn't
+reachable, so the full report makes clear the security block wasn't
+just silently omitted.
 
 ### Handling "tolerated" errors
 
