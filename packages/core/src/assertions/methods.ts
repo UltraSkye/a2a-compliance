@@ -6,7 +6,7 @@ import {
   makeProbeMessage,
   TaskSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now } from '../http.js';
+import { fetchWithTimeout, now, readCappedText } from '../http.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
 
@@ -50,7 +50,7 @@ export async function messageSendCheck(
       body,
     });
 
-    const text = await res.text();
+    const text = await readCappedText(res);
     let json: unknown;
     try {
       json = JSON.parse(text);
@@ -143,7 +143,7 @@ export async function messageStreamContentTypeCheck(
     if (!isSse) {
       let json: unknown;
       try {
-        json = JSON.parse(await res.text());
+        json = JSON.parse(await readCappedText(res));
       } catch {
         return fail(
           'rpc.messageStream.contentType',

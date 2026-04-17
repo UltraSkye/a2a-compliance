@@ -1,5 +1,5 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now } from '../http.js';
+import { fetchWithTimeout, now, readCappedJson } from '../http.js';
 import type { CheckResult } from '../report.js';
 
 export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
@@ -33,11 +33,11 @@ export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
 
   if (!res.ok) return results;
 
-  // Check 2: response is valid JSON
+  // Check 2: response is valid JSON (and within size cap)
   const t1 = now();
   let body: unknown;
   try {
-    body = await res.json();
+    body = await readCappedJson(res);
     results.push({
       id: 'card.json',
       title: 'Agent card body is valid JSON',
