@@ -55,10 +55,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   // SSRF guard on the hostname the caller asked us to probe: if their URL
   // already points at private IP space, we refuse — otherwise the hosted
   // dashboard becomes an open SSRF probe against its own network.
+  //
+  // We don't surface the detailed reason (which would echo back the
+  // resolved IP or the hostname the server's resolver was queried with)
+  // because that turns the API into a DNS / internal-IP enumeration
+  // oracle. Just say "not permitted" and keep the diagnostic server-side.
   const safety = await ssrfCheckForUrl(body.url);
   if (!safety.ok) {
     return noCacheJson(
-      { error: `refusing to probe this URL: ${safety.reason ?? 'private-space target'}` },
+      { error: 'target URL not permitted (resolved to private or non-routable space)' },
       { status: 400 },
     );
   }
