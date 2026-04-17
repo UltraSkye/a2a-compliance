@@ -1,0 +1,27 @@
+# Drop this into .gitlab-ci.yml in the repo that hosts your A2A agent.
+# GitLab picks up JUnit XML reports automatically and surfaces them in
+# the MR widget.
+
+a2a-compliance:
+  image: node:24-bookworm-slim
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+  script:
+    - mkdir -p reports badges
+    - npx --yes @a2a-compliance/cli@latest run "$A2A_URL"
+        --junit reports/a2a.junit.xml
+        --badge badges/a2a.svg
+        --fail-on must
+  artifacts:
+    when: always
+    reports:
+      junit: reports/a2a.junit.xml
+    paths:
+      - badges/a2a.svg
+    expire_in: 30 days
+  variables:
+    # Override per environment. A CI/CD variable works too.
+    A2A_URL: 'https://your-agent.example.com'

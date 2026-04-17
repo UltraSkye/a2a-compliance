@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: a2a-compliance
+message: "Automated compliance testing for the Agent2Agent (A2A) protocol"
+type: software
+authors:
+  - name: a2a-compliance contributors
+abstract: >-
+  A compliance test kit and validator for A2A (Agent2Agent) protocol
+  endpoints. Covers agent card schema, JSON-RPC envelope, A2A method set
+  (v0.3 and v1.0), and security checks (SSRF, TLS, CORS, redirect
+  re-check).
+repository-code: "https://github.com/UltraSkye/a2a-compliance"
+license: MIT
+keywords:
+  - a2a
+  - agent2agent
+  - compliance
+  - testing
+  - tck
+  - llm
+  - protocol
+  - security

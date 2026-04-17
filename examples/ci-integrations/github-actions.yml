@@ -1,0 +1,46 @@
+# Drop this into .github/workflows/a2a-compliance.yml in the repo that
+# hosts your A2A agent. It runs on every push to main and on every PR,
+# failing the build if the agent stops being compliant or trips a
+# MUST-level security check.
+
+name: A2A compliance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Daily 06:00 UTC run so regressions in a deployed agent get caught
+    # even if no commits landed. Delete if you only care about PR gates.
+    - cron: '0 6 * * *'
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: UltraSkye/a2a-compliance@v1
+        with:
+          url: https://your-agent.example.com
+          junit: ./reports/a2a.junit.xml
+          badge: ./badges/a2a.svg
+          # fail-on values: any | must (default) | never
+          fail-on: must
+
+      # Upload the JUnit report to the run summary.
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: A2A compliance
+          path: reports/a2a.junit.xml
+          reporter: java-junit
+
+      # Commit the badge SVG back so README can reference it.
+      - name: Update badge
+        if: github.ref == 'refs/heads/main' && success()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add badges/a2a.svg
+          git diff --quiet --staged || git commit -m 'chore: refresh a2a-compliance badge'
+          git push

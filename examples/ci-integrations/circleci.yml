@@ -1,0 +1,29 @@
+# Drop this into .circleci/config.yml in the repo that hosts your A2A
+# agent. The 'store_test_results' step gives you the CircleCI 'Tests'
+# tab without any extra plugins.
+
+version: 2.1
+
+jobs:
+  a2a-compliance:
+    docker:
+      - image: cimg/node:24.0
+    steps:
+      - checkout
+      - run:
+          name: Run a2a-compliance
+          command: |
+            mkdir -p reports
+            npx --yes @a2a-compliance/cli@latest run "$A2A_URL" \
+              --junit reports/a2a.junit.xml \
+              --fail-on must
+      - store_test_results:
+          path: reports
+      - store_artifacts:
+          path: reports
+
+workflows:
+  version: 2
+  compliance:
+    jobs:
+      - a2a-compliance
