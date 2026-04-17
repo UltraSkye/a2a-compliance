@@ -131,7 +131,6 @@ export async function messageStreamContentTypeCheck(endpoint: string): Promise<C
         Accept: 'text/event-stream',
       },
       body,
-      timeoutMs: 6_000,
     });
 
     const ct = res.headers.get('content-type') ?? '';
