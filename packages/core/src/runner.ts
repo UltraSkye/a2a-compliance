@@ -4,6 +4,7 @@ import {
   cardSsrfChecks,
   jsonRpcChecks,
   methodChecks,
+  pushNotificationChecks,
 } from './assertions/index.js';
 import { fetchWithTimeout } from './http.js';
 import type { ComplianceReport } from './report.js';
@@ -50,7 +51,11 @@ export async function runFullChecks(
   const rpcEndpoint = opts.skipProtocol ? undefined : await discoverEndpoint(baseUrl);
 
   const protocolResults = rpcEndpoint
-    ? [...(await jsonRpcChecks(rpcEndpoint)), ...(await methodChecks(rpcEndpoint))]
+    ? [
+        ...(await jsonRpcChecks(rpcEndpoint)),
+        ...(await methodChecks(rpcEndpoint)),
+        ...(await pushNotificationChecks(baseUrl, rpcEndpoint)),
+      ]
     : [];
   const securityResults = opts.skipSecurity ? [] : await cardSsrfChecks(baseUrl);
   const checks = [...cardResults, ...protocolResults, ...securityResults];

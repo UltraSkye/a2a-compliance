@@ -55,6 +55,10 @@ pnpm cli run https://your-agent.example.com --junit ./report.junit.xml
 
 # Shields-style SVG badge for your README
 pnpm cli run https://your-agent.example.com --badge ./badge.svg
+
+# Snapshot the current compliance state and fail later on regressions
+pnpm cli run https://your-agent.example.com --snapshot-out ./baseline.json
+pnpm cli run https://your-agent.example.com --snapshot    ./baseline.json
 ```
 
 ### GitHub Action

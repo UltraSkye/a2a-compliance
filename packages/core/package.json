@@ -1,8 +1,27 @@
 {
   "name": "@a2a-compliance/core",
   "version": "0.0.0",
-  "description": "Assertion engine and test runner for A2A protocol compliance",
+  "description": "Assertion engine and reporters (JSON, JUnit, badge SVG) for A2A protocol compliance testing",
+  "keywords": [
+    "a2a",
+    "agent2agent",
+    "compliance",
+    "testing",
+    "tck",
+    "llm",
+    "protocol"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/UltraSkye/a2a-compliance#readme",
+  "bugs": "https://github.com/UltraSkye/a2a-compliance/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UltraSkye/a2a-compliance.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,7 +38,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@a2a-compliance/schemas": "workspace:*",

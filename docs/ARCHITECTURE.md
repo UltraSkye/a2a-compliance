@@ -66,10 +66,40 @@ Exit code policy (`--fail-on`):
 3. **Week 3** — `message/send` happy path + `message/stream` SSE sanity ✅ *shipped*
 4. **Week 4** — SSRF, HTTPS, CORS security checks ✅ *shipped*
 5. **Week 5** — Next.js dashboard, GitHub Action, badge SVG ✅ *shipped*
-6. **Week 6** — DX polish: `init` command, snapshot/regression mode,
-   versioned spec selector, `tasks/resubscribe`, push-notification config
-   round-trip.
+6. **Week 6** — Snapshot mode, `tasks/resubscribe`, push-notification
+   config round-trip, npm publish prep ✅ *shipped*
 7. **Week 7** — Public launch.
+
+## Snapshot mode
+
+Compliance results change over time — regressions are the thing CI is
+supposed to catch. The snapshot format is deliberately minimal:
+
+```json
+{
+  "version": 1,
+  "target": "https://agent.example.com",
+  "specVersion": "1.0",
+  "capturedAt": "2026-04-17T12:00:00.000Z",
+  "checks": { "card.reachable": "pass", "rpc.parseError": "pass", ... }
+}
+```
+
+Only check id → status is recorded — no messages, no durations. That keeps
+diffs stable across flaky runs and lets the baseline live in the same repo
+as the code that serves the endpoint.
+
+Status transitions are classified by weight (`pass`/`skip` < `warn` <
+`fail`):
+- `pass → fail` — regression
+- `warn → fail` — regression
+- `fail → pass` — improvement
+- `pass → skip` — neither (a previously covered check that now skipped
+  because a capability flag flipped is not a failure, but we record it)
+
+A run with `--snapshot <path>` fails with a non-zero exit code if any
+regression exists, independent of `--fail-on`. `--fail-on never` still
+suppresses the hard exit for CI integrations that just want diff output.
 
 ## Current assertions
 
@@ -87,6 +117,9 @@ Exit code policy (`--fail-on`):
 | `rpc.tasksGet.notFound` | should | A2A method |
 | `rpc.messageSend.shape` | must | A2A method |
 | `rpc.messageStream.contentType` | should | A2A method (streaming) |
+| `rpc.tasksResubscribe.notFound` | should | A2A method |
+| `rpc.pushNotifications.set` | should | A2A method (capability-gated) |
+| `rpc.pushNotifications.get` | should | A2A method (capability-gated) |
 | `sec.tls.https` | must | Security / Transport |
 | `sec.ssrf` | must | Security / SSRF |
 | `sec.cors.wildcardWithCreds` | must | Security / CORS |
