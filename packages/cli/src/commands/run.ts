@@ -90,7 +90,21 @@ export function registerRunCommand(program: Command): void {
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
 
 function compareSnapshot(report: ComplianceReport, path: string): SnapshotDiff {
-  const stats = statSync(path);
+  let stats: ReturnType<typeof statSync>;
+  try {
+    stats = statSync(path);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      throw new Error(
+        `snapshot file not found: ${path}\n  capture one first with --snapshot-out <path>`,
+      );
+    }
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new Error(`snapshot file ${path} is not readable: ${code}`);
+    }
+    throw err;
+  }
   if (stats.size > MAX_SNAPSHOT_BYTES) {
     throw new Error(
       `snapshot file ${path} is ${stats.size} bytes, above the ${MAX_SNAPSHOT_BYTES}-byte cap`,
