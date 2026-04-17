@@ -9,6 +9,7 @@ import {
   toSnapshot,
 } from '@a2a-compliance/core';
 import type { Command } from 'commander';
+import { Option } from 'commander';
 import pc from 'picocolors';
 import type { FailOn } from '../output.js';
 import { decideExit, printHuman } from '../output.js';
@@ -38,7 +39,11 @@ export function registerRunCommand(program: Command): void {
       '--snapshot <path>',
       'compare this run against a baseline snapshot; exit non-zero on any regression',
     )
-    .option('--fail-on <mode>', 'exit non-zero on: any | must (default) | never', 'must')
+    .addOption(
+      new Option('--fail-on <mode>', 'exit non-zero on given severity')
+        .choices(['any', 'must', 'never'])
+        .default('must'),
+    )
     .option('--skip-protocol', 'skip live JSON-RPC checks (card-only run)')
     .option('--skip-security', 'skip SSRF/TLS/CORS security checks')
     .action(async (url: string, opts: RunOptions) => {

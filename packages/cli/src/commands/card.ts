@@ -1,5 +1,6 @@
 import { runCardChecks } from '@a2a-compliance/core';
 import type { Command } from 'commander';
+import { Option } from 'commander';
 import type { FailOn } from '../output.js';
 import { decideExit, printHuman } from '../output.js';
 
@@ -13,7 +14,11 @@ export function registerCardCommand(program: Command): void {
     .command('card <url>')
     .description('Validate an A2A agent card at /.well-known/agent-card.json')
     .option('--json', 'output report as JSON (for CI)')
-    .option('--fail-on <mode>', 'exit non-zero on: any | must (default) | never', 'must')
+    .addOption(
+      new Option('--fail-on <mode>', 'exit non-zero on given severity')
+        .choices(['any', 'must', 'never'])
+        .default('must'),
+    )
     .action(async (url: string, opts: CardOptions) => {
       const report = await runCardChecks(url);
 

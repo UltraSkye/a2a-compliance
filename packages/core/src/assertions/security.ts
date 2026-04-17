@@ -24,7 +24,7 @@ function collectCardUrls(card: unknown): string[] {
   return urls;
 }
 
-function isPrivateIPv4(ip: string): boolean {
+export function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
   if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return false;
   const [a, b] = parts as [number, number, number, number];
@@ -38,7 +38,7 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
-function isPrivateIPv6(ip: string): boolean {
+export function isPrivateIPv6(ip: string): boolean {
   const lower = ip.toLowerCase();
   if (lower === '::1') return true; // loopback
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // ULA
@@ -56,7 +56,8 @@ async function resolveAll(hostname: string): Promise<string[]> {
   }
 }
 
-async function ssrfCheckForUrl(rawUrl: string): Promise<{ ok: boolean; reason?: string }> {
+/** Detailed SSRF inspection of a single URL. Exported for use in the web API guard. */
+export async function ssrfCheckForUrl(rawUrl: string): Promise<{ ok: boolean; reason?: string }> {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -64,21 +65,20 @@ async function ssrfCheckForUrl(rawUrl: string): Promise<{ ok: boolean; reason?: 
     return { ok: false, reason: `not a valid URL: ${rawUrl}` };
   }
 
-  // Literal IPs in the URL — check directly.
   if (isIP(url.hostname)) {
-    if (isIP(url.hostname) === 4 && isPrivateIPv4(url.hostname)) {
+    const v = isIP(url.hostname);
+    if (v === 4 && isPrivateIPv4(url.hostname)) {
       return { ok: false, reason: `literal IP ${url.hostname} is in a private range` };
     }
-    if (isIP(url.hostname) === 6 && isPrivateIPv6(url.hostname)) {
+    if (v === 6 && isPrivateIPv6(url.hostname)) {
       return { ok: false, reason: `literal IPv6 ${url.hostname} is in a private range` };
     }
     return { ok: true };
   }
 
-  // Special hostnames.
   const lowerHost = url.hostname.toLowerCase();
   if (lowerHost === 'localhost' || lowerHost.endsWith('.localhost')) {
-    return { ok: false, reason: `hostname resolves to localhost` };
+    return { ok: false, reason: 'hostname resolves to localhost' };
   }
 
   const ips = await resolveAll(url.hostname);
@@ -97,118 +97,108 @@ async function ssrfCheckForUrl(rawUrl: string): Promise<{ ok: boolean; reason?: 
 }
 
 export async function cardSsrfChecks(baseUrl: string): Promise<CheckResult[]> {
-  const results: CheckResult[] = [];
   const t0 = now();
   const cardUrl = new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString();
 
+  // Single fetch — we also want the response headers for the CORS check.
+  let res: Response;
   let card: unknown;
   try {
-    const res = await fetchWithTimeout(cardUrl);
+    res = await fetchWithTimeout(cardUrl);
     if (!res.ok) {
-      results.push({
+      return [
+        {
+          id: 'sec.card.fetch',
+          title: 'Agent card fetched for security checks',
+          severity: 'info',
+          status: 'skip',
+          message: `card not reachable (HTTP ${res.status})`,
+          durationMs: now() - t0,
+        },
+      ];
+    }
+    card = await res.json();
+  } catch (err) {
+    return [
+      {
         id: 'sec.card.fetch',
         title: 'Agent card fetched for security checks',
         severity: 'info',
         status: 'skip',
-        message: `card not reachable (HTTP ${res.status})`,
+        message: err instanceof Error ? err.message : String(err),
         durationMs: now() - t0,
-      });
-      return results;
-    }
-    card = await res.json();
-  } catch (err) {
-    results.push({
-      id: 'sec.card.fetch',
-      title: 'Agent card fetched for security checks',
-      severity: 'info',
-      status: 'skip',
-      message: err instanceof Error ? err.message : String(err),
-      durationMs: now() - t0,
-    });
-    return results;
+      },
+    ];
   }
 
   const urls = collectCardUrls(card);
   if (urls.length === 0) {
-    results.push({
-      id: 'sec.card.fetch',
-      title: 'Agent card parsed for security checks',
-      severity: 'info',
-      status: 'skip',
-      message: 'card did not parse, nothing to probe',
-      durationMs: now() - t0,
-    });
-    return results;
+    return [
+      {
+        id: 'sec.card.fetch',
+        title: 'Agent card parsed for security checks',
+        severity: 'info',
+        status: 'skip',
+        message: 'card did not parse, nothing to probe',
+        durationMs: now() - t0,
+      },
+    ];
   }
 
-  // 1. HTTPS-only — http:// card URLs are a red flag for secrets in transit.
-  for (const rawUrl of urls) {
+  const results: CheckResult[] = [];
+
+  // 1. HTTPS-only — aggregate across all card URLs.
+  const cleartextUrls = urls.filter((u) => {
     try {
-      const u = new URL(rawUrl);
-      if (u.protocol !== 'https:') {
-        results.push({
-          id: 'sec.tls.https',
-          title: `Card URL uses HTTPS: ${redact(rawUrl)}`,
-          severity: 'must',
-          status: 'fail',
-          message: `uses ${u.protocol} — A2A credentials would travel in cleartext`,
-          durationMs: 0,
-        });
-      }
+      return new URL(u).protocol !== 'https:';
     } catch {
-      // URL already flagged by schema validator; ignore here.
+      return false;
     }
-  }
+  });
+  results.push({
+    id: 'sec.tls.https',
+    title: 'All URLs declared in the agent card use HTTPS',
+    severity: 'must',
+    status: cleartextUrls.length === 0 ? 'pass' : 'fail',
+    ...(cleartextUrls.length > 0
+      ? { message: `cleartext URLs: ${cleartextUrls.map(redact).join(', ')}` }
+      : {}),
+    durationMs: 0,
+  });
 
-  // 2. SSRF — each URL must not resolve into private space.
+  // 2. SSRF — aggregate across all card URLs.
+  const ssrfStart = now();
+  const ssrfFailures: string[] = [];
   for (const rawUrl of urls) {
-    const ts = now();
-    const ssrf = await ssrfCheckForUrl(rawUrl);
-    results.push({
-      id: 'sec.ssrf',
-      title: `Card URL does not resolve to private IP space: ${redact(rawUrl)}`,
-      severity: 'must',
-      status: ssrf.ok ? 'pass' : 'fail',
-      ...(ssrf.ok ? {} : { message: ssrf.reason ?? 'private-space resolution' }),
-      durationMs: now() - ts,
-    });
+    const r = await ssrfCheckForUrl(rawUrl);
+    if (!r.ok) ssrfFailures.push(r.reason ? `${redact(rawUrl)}: ${r.reason}` : redact(rawUrl));
   }
+  results.push({
+    id: 'sec.ssrf',
+    title: 'No agent-card URL resolves to private IP space',
+    severity: 'must',
+    status: ssrfFailures.length === 0 ? 'pass' : 'fail',
+    ...(ssrfFailures.length > 0 ? { message: ssrfFailures.join('; ') } : {}),
+    durationMs: now() - ssrfStart,
+  });
 
-  // 3. Basic response hygiene on the card itself.
-  try {
-    const res = await fetchWithTimeout(cardUrl);
-    // Agent card SHOULD NOT set Access-Control-Allow-Origin: * without
-    // Access-Control-Allow-Credentials=false — otherwise any origin can read
-    // the card and attack from there.
-    const aco = res.headers.get('access-control-allow-origin');
-    const acc = res.headers.get('access-control-allow-credentials');
-    if (aco === '*' && acc?.toLowerCase() === 'true') {
-      results.push({
-        id: 'sec.cors.wildcardWithCreds',
-        title: 'Agent card does not allow wildcard origins with credentials',
-        severity: 'must',
-        status: 'fail',
-        message: 'ACAO:* combined with ACAC:true is a browser-CORS violation',
-        durationMs: 0,
-      });
-    } else {
-      results.push({
-        id: 'sec.cors.wildcardWithCreds',
-        title: 'Agent card does not allow wildcard origins with credentials',
-        severity: 'must',
-        status: 'pass',
-        durationMs: 0,
-      });
-    }
-  } catch {
-    // Already covered by the reachability check earlier.
-  }
+  // 3. CORS hygiene — reuse the headers from the initial fetch.
+  const aco = res.headers.get('access-control-allow-origin');
+  const acc = res.headers.get('access-control-allow-credentials');
+  const corsFail = aco === '*' && acc?.toLowerCase() === 'true';
+  results.push({
+    id: 'sec.cors.wildcardWithCreds',
+    title: 'Agent card does not allow wildcard origins with credentials',
+    severity: 'must',
+    status: corsFail ? 'fail' : 'pass',
+    ...(corsFail ? { message: 'ACAO:* combined with ACAC:true is a browser-CORS violation' } : {}),
+    durationMs: 0,
+  });
 
   return results;
 }
 
 function redact(s: string): string {
-  // Keep URLs readable but don't leak query-string credentials in reports.
   try {
     const u = new URL(s);
     return `${u.protocol}//${u.host}${u.pathname}`;
