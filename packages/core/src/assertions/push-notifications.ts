@@ -6,7 +6,7 @@ import {
   JsonRpcErrorCode,
   JsonRpcResponseSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now } from '../http.js';
+import { fetchWithTimeout, now, readCappedJson, readCappedText } from '../http.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
 
@@ -20,7 +20,7 @@ async function capabilityDeclared(baseUrl: string): Promise<boolean> {
   try {
     const res = await fetchWithTimeout(new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString());
     if (!res.ok) return false;
-    const parsed = AgentCardSchema.safeParse(await res.json());
+    const parsed = AgentCardSchema.safeParse(await readCappedJson(res));
     return parsed.success && parsed.data.capabilities.pushNotifications === true;
   } catch {
     return false;
@@ -48,7 +48,7 @@ async function probePush(
         },
       }),
     });
-    const text = await res.text();
+    const text = await readCappedText(res);
     let json: unknown;
     try {
       json = JSON.parse(text);

@@ -8,8 +8,12 @@ on:
 
 jobs:
   packages:
-    name: packages (lint + typecheck + build + test)
+    name: packages / node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.11', '22', '24']
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +23,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile

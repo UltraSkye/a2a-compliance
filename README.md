@@ -1,5 +1,8 @@
 # a2a-compliance
 
+[![CI](https://github.com/UltraSkye/a2a-compliance/actions/workflows/ci.yml/badge.svg)](https://github.com/UltraSkye/a2a-compliance/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+
 > Compliance test kit and validator for [A2A (Agent2Agent) protocol][a2a]
 > endpoints. Automated, CI-friendly, scriptable.
 

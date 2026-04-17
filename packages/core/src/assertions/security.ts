@@ -1,7 +1,7 @@
 import { promises as dns } from 'node:dns';
 import { isIP } from 'node:net';
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now } from '../http.js';
+import { fetchWithTimeout, now, readCappedJson } from '../http.js';
 import type { CheckResult } from '../report.js';
 
 // A2A agents publish URLs that your client will POST credentials and messages
@@ -117,7 +117,7 @@ export async function cardSsrfChecks(baseUrl: string): Promise<CheckResult[]> {
         },
       ];
     }
-    card = await res.json();
+    card = await readCappedJson(res);
   } catch (err) {
     return [
       {

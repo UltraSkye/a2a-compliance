@@ -4,7 +4,7 @@ import {
   JsonRpcErrorCode,
   JsonRpcResponseSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now } from '../http.js';
+import { fetchWithTimeout, now, readCappedText } from '../http.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
 
@@ -30,7 +30,7 @@ async function probe(
       body: p.body,
     });
 
-    const text = await res.text();
+    const text = await readCappedText(res);
     let json: unknown;
     try {
       json = JSON.parse(text);

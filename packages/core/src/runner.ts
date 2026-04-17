@@ -6,7 +6,7 @@ import {
   methodChecks,
   pushNotificationChecks,
 } from './assertions/index.js';
-import { fetchWithTimeout } from './http.js';
+import { fetchWithTimeout, readCappedJson } from './http.js';
 import type { CheckResult, ComplianceReport } from './report.js';
 import { summarize } from './report.js';
 import type { SpecVersion } from './spec.js';
@@ -97,7 +97,7 @@ async function discover(baseUrl: string): Promise<Discovery | undefined> {
   try {
     const res = await fetchWithTimeout(cardUrl);
     if (!res.ok) return undefined;
-    const parsed = AgentCardSchema.safeParse(await res.json());
+    const parsed = AgentCardSchema.safeParse(await readCappedJson(res));
     if (!parsed.success) return undefined;
     return {
       endpoint: parsed.data.url,
