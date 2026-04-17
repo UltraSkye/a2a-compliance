@@ -31,6 +31,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
+      # Coverage thresholds per package are pinned in each package's
+      # vitest.config.ts — this step fails the build on regression.
+      - run: pnpm -r --filter=./packages/* exec npx vitest run --coverage
 
   web:
     name: web (typecheck + build)
