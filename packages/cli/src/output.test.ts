@@ -1,5 +1,13 @@
+import type { CheckResult } from '@a2a-compliance/core';
 import { describe, expect, it } from 'vitest';
-import { sanitizeForTerminal } from './output.js';
+import { decideExit, sanitizeForTerminal } from './output.js';
+
+function chk(
+  status: CheckResult['status'],
+  severity: CheckResult['severity'] = 'must',
+): CheckResult {
+  return { id: status, title: status, severity, status, durationMs: 0 };
+}
 
 describe('sanitizeForTerminal', () => {
   it('strips CSI colour sequences', () => {
@@ -30,5 +38,37 @@ describe('sanitizeForTerminal', () => {
 
   it('preserves tab within a line', () => {
     expect(sanitizeForTerminal('col1\tcol2')).toBe('col1\tcol2');
+  });
+});
+
+describe('decideExit', () => {
+  it('returns 0 when every check passed, regardless of mode', () => {
+    const checks = [chk('pass'), chk('pass', 'should')];
+    expect(decideExit(checks, 'must')).toBe(0);
+    expect(decideExit(checks, 'any')).toBe(0);
+    expect(decideExit(checks, 'never')).toBe(0);
+  });
+
+  it("'must' mode — exits 1 only on MUST-level failure", () => {
+    expect(decideExit([chk('fail', 'must')], 'must')).toBe(1);
+    expect(decideExit([chk('fail', 'should')], 'must')).toBe(0);
+    expect(decideExit([chk('warn', 'must')], 'must')).toBe(0);
+    expect(decideExit([chk('skip', 'must')], 'must')).toBe(0);
+  });
+
+  it("'any' mode — exits 1 on any failure, regardless of severity", () => {
+    expect(decideExit([chk('fail', 'must')], 'any')).toBe(1);
+    expect(decideExit([chk('fail', 'should')], 'any')).toBe(1);
+    expect(decideExit([chk('fail', 'info')], 'any')).toBe(1);
+    expect(decideExit([chk('warn', 'must')], 'any')).toBe(0); // warn is not fail
+  });
+
+  it("'never' mode — always exits 0", () => {
+    expect(decideExit([chk('fail', 'must'), chk('fail', 'should')], 'never')).toBe(0);
+  });
+
+  it('treats empty report as pass', () => {
+    expect(decideExit([], 'must')).toBe(0);
+    expect(decideExit([], 'any')).toBe(0);
   });
 });
