@@ -121,6 +121,32 @@ Exit code policy is controlled by `--fail-on`:
 | `any`        | any check failed or warned              |
 | `never`      | never (reporting-only runs)             |
 
+## Use as a library
+
+Everything the CLI does is exposed programmatically. Typical flow:
+
+```ts
+import { runFullChecks, toJUnitXml, hasRegressions } from '@a2a-compliance/core';
+
+const report = await runFullChecks('https://agent.example.com');
+console.log(report.summary);   // { total, pass, fail, warn, skip }
+
+// Persist for CI
+fs.writeFileSync('report.junit.xml', toJUnitXml(report));
+```
+
+Or parse a card straight from a Zod schema, no engine required:
+
+```ts
+import { AgentCardSchema } from '@a2a-compliance/schemas';
+
+const parsed = AgentCardSchema.safeParse(await (await fetch(url)).json());
+```
+
+Use `ssrfCheckForUrl` from `@a2a-compliance/core` to reject private-space
+URLs in your own HTTP handler. See each package's README on npm for
+per-export details.
+
 ## Repository layout
 
 This is a pnpm workspace monorepo.
