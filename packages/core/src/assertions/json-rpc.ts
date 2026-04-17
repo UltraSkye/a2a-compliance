@@ -142,5 +142,23 @@ export async function jsonRpcChecks(endpoint: string): Promise<CheckResult[]> {
     }),
   );
 
+  // 5. tasks/resubscribe with a bogus id — same accepted set as tasks/get.
+  results.push(
+    await probe(endpoint, 'rpc.tasksResubscribe.notFound', 'should', {
+      title: 'tasks/resubscribe returns TaskNotFoundError (-32001) for unknown task id',
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'tasks/resubscribe',
+        params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
+      }),
+      acceptableErrorCodes: [
+        A2AErrorCode.TaskNotFoundError,
+        JsonRpcErrorCode.InvalidParams,
+        A2AErrorCode.UnsupportedOperationError,
+      ],
+    }),
+  );
+
   return results;
 }

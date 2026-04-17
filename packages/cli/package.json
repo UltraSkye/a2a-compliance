@@ -1,8 +1,26 @@
 {
   "name": "@a2a-compliance/cli",
   "version": "0.0.0",
-  "description": "CLI for A2A protocol compliance testing",
+  "description": "CLI for running A2A protocol compliance tests against agent endpoints",
+  "keywords": [
+    "a2a",
+    "agent2agent",
+    "compliance",
+    "cli",
+    "testing",
+    "protocol"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/UltraSkye/a2a-compliance#readme",
+  "bugs": "https://github.com/UltraSkye/a2a-compliance/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UltraSkye/a2a-compliance.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "bin": {
     "a2a-compliance": "./dist/index.js"
@@ -17,7 +35,8 @@
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@a2a-compliance/core": "workspace:*",

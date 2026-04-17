@@ -1,8 +1,27 @@
 {
   "name": "@a2a-compliance/schemas",
   "version": "0.0.0",
-  "description": "Zod schemas for A2A protocol (Agent Card, Task, Message)",
+  "description": "Zod schemas for the A2A (Agent2Agent) protocol: Agent Card, JSON-RPC envelope, Task, Message",
+  "keywords": [
+    "a2a",
+    "agent2agent",
+    "mcp",
+    "zod",
+    "schema",
+    "llm",
+    "protocol"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/UltraSkye/a2a-compliance#readme",
+  "bugs": "https://github.com/UltraSkye/a2a-compliance/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UltraSkye/a2a-compliance.git",
+    "directory": "packages/schemas"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,7 +38,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "zod": "^4.0.0"
