@@ -164,5 +164,24 @@ export async function jsonRpcChecks(
     }),
   );
 
+  // 6. tasks/cancel — bogus id should produce TaskNotFoundError, InvalidParams
+  //    or TaskNotCancelableError. Completes the core A2A method set.
+  results.push(
+    await probe(endpoint, 'rpc.tasksCancel.notFound', 'should', {
+      title: `${methods.cancel} rejects an unknown task id`,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 4,
+        method: methods.cancel,
+        params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
+      }),
+      acceptableErrorCodes: [
+        A2AErrorCode.TaskNotFoundError,
+        A2AErrorCode.TaskNotCancelableError,
+        JsonRpcErrorCode.InvalidParams,
+      ],
+    }),
+  );
+
   return results;
 }
