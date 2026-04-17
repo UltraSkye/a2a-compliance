@@ -84,7 +84,11 @@ async function probePush(
       title,
       severity: 'should',
       status: ok ? 'pass' : 'fail',
-      ...(ok ? {} : { message: `got unexpected error ${code}: ${parsed.data.error.message}` }),
+      ...(ok
+        ? {}
+        : {
+            message: `got unexpected error ${code}: ${redactInText(parsed.data.error.message)}`,
+          }),
       durationMs: now() - t0,
     };
   } catch (err) {
