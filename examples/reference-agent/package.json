@@ -1,0 +1,15 @@
+{
+  "name": "a2a-reference-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal spec-compliant A2A agent used for dogfooding and end-to-end tests",
+  "license": "MIT",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=22.10.0"
+  }
+}

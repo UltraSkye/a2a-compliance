@@ -49,15 +49,56 @@ a2a-compliance/
 ## Check taxonomy
 
 Every check produces a `CheckResult` with:
-- `id` — stable, dotted identifier (`card.schema`, `protocol.jsonRpcShape`)
+- `id` — stable, dotted identifier (`card.schema`, `rpc.parseError`)
+- `category` — `card` | `protocol` | `methods` | `security` | `spec` | `auth`
 - `severity` — `must` | `should` | `info` (maps to RFC 2119)
 - `status` — `pass` | `fail` | `warn` | `skip`
+- `specRef?` — `{ section, url }` pointer into the upstream spec
+  (populated from the central catalog unless the emission site supplies
+  its own)
 - `message`, `evidence` — optional diagnostic payload
+
+Each report ends with a **compliance tier** (`ComplianceSummary.tier`):
+- `NON_COMPLIANT` — any MUST-level check failed
+- `MANDATORY` — all MUSTs pass, some SHOULDs failed or warned
+- `RECOMMENDED` — all MUSTs + SHOULDs pass, but some non-info check was skipped
+- `FULL_FEATURED` — every emitted check passed
 
 Exit code policy (`--fail-on`):
 - `must` (default) — fail the process only if a MUST-level check failed
 - `any` — fail on any failure (including SHOULD warnings)
 - `never` — always exit 0 (useful for reporting-only runs)
+
+## Catalog
+
+`packages/core/src/catalog.ts` is the single source of truth for every
+check: id, default category, default severity, human-readable description,
+and upstream spec reference. The runner decorates every `CheckResult` with
+its catalog entry so reporters, filters, and downstream tooling see a
+uniform shape without each emission site having to repeat the metadata.
+
+Runtime discovery:
+
+```bash
+a2a-compliance list               # grouped listing
+a2a-compliance list --json        # full JSON catalog
+a2a-compliance explain sec.ssrf   # full entry for one id
+```
+
+Callable from code:
+
+```ts
+import { CHECK_CATALOG, explain, listCheckIds } from '@a2a-compliance/core';
+```
+
+## Capability-gated severity
+
+Some checks (push-notification config, streaming) only run when the
+agent card declares the relevant capability. When the capability **is**
+declared, the severity of those checks is promoted from `should` to
+`must` — the "false advertising" rule. An agent that claims
+`capabilities.streaming` and then returns JSON instead of
+`text/event-stream` lands in `NON_COMPLIANT`, not `MANDATORY`.
 
 ## Roadmap
 
@@ -105,28 +146,31 @@ suppresses the hard exit for CI integrations that just want diff output.
 
 | ID | Severity | Category |
 |----|----------|----------|
-| `card.reachable` | must | Agent Card |
-| `card.json` | must | Agent Card |
-| `card.schema` | must | Agent Card |
-| `card.contentType` | should | Agent Card |
-| `card.urlAbsolute` | must | Agent Card |
-| `card.skillsNonEmpty` | must | Agent Card |
-| `rpc.parseError` | must | JSON-RPC |
-| `rpc.invalidRequest` | must | JSON-RPC |
-| `rpc.methodNotFound` | must | JSON-RPC |
-| `rpc.tasksGet.notFound` | should | A2A method |
-| `card.protocolVersion` | should | Spec compatibility |
-| `rpc.messageSend.shape` | must | A2A method |
-| `rpc.messageStream.contentType` | should | A2A method (streaming) |
-| `rpc.tasksResubscribe.notFound` | should | A2A method |
-| `rpc.tasksCancel.notFound` | should | A2A method |
-| `rpc.pushNotifications.capability` | info | A2A method (skip marker) |
-| `rpc.pushNotifications.set` | should | A2A method (capability-gated) |
-| `rpc.pushNotifications.get` | should | A2A method (capability-gated) |
-| `sec.card.fetch` | info | Security (skip marker) |
-| `sec.tls.https` | must | Security / Transport |
-| `sec.ssrf` | must | Security / SSRF |
-| `sec.cors.wildcardWithCreds` | must | Security / CORS |
+| `card.reachable` | must | card |
+| `card.json` | must | card |
+| `card.schema` | must | card |
+| `card.contentType` | should | card |
+| `card.urlAbsolute` | must | card |
+| `card.skillsNonEmpty` | must | card |
+| `card.protocolVersion` | should | spec |
+| `rpc.parseError` | must | protocol |
+| `rpc.invalidRequest` | must | protocol |
+| `rpc.methodNotFound` | must | protocol |
+| `rpc.batch` | should | protocol |
+| `rpc.tasksGet.notFound` | should | methods |
+| `rpc.tasksResubscribe.notFound` | should | methods |
+| `rpc.tasksCancel.notFound` | should | methods |
+| `rpc.messageSend.shape` | must | methods |
+| `rpc.messageStream.contentType` | should / must (capability-gated) | methods |
+| `rpc.pushNotifications.capability` | info | methods (skip marker) |
+| `rpc.pushNotifications.set` | must (when declared) | methods |
+| `rpc.pushNotifications.get` | must (when declared) | methods |
+| `sec.card.fetch` | info | security (skip marker) |
+| `sec.tls.https` | must | security |
+| `sec.ssrf` | must | security |
+| `sec.cors.wildcardWithCreds` | must | security |
+| `auth.anonChallenge` | should | auth |
+| `auth.discovery` | should | auth |
 
 The two `info`-level rows above are *skip markers* rather than
 compliance assertions. They appear only when the runner intentionally

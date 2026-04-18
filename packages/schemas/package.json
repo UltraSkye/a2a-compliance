@@ -1,6 +1,6 @@
 {
   "name": "@a2a-compliance/schemas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zod schemas for the A2A (Agent2Agent) protocol: Agent Card, JSON-RPC envelope, Task, Message",
   "keywords": [
     "a2a",

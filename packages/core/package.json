@@ -1,6 +1,6 @@
 {
   "name": "@a2a-compliance/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Assertion engine and reporters (JSON, JUnit, badge SVG) for A2A protocol compliance testing",
   "keywords": [
     "a2a",
@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "@a2a-compliance/schemas": "workspace:*",
+    "undici": "^8.1.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {

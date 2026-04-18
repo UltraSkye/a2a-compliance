@@ -33,6 +33,7 @@ async function probePush(
   id: string,
   title: string,
   method: string,
+  severity: CheckResult['severity'],
 ): Promise<CheckResult> {
   const t0 = now();
   try {
@@ -57,7 +58,7 @@ async function probePush(
       return {
         id,
         title,
-        severity: 'should',
+        severity,
         status: 'fail',
         message: `response is not JSON (HTTP ${res.status})`,
         durationMs: now() - t0,
@@ -68,21 +69,21 @@ async function probePush(
       return {
         id,
         title,
-        severity: 'should',
+        severity,
         status: 'fail',
         message: 'response is not a valid JSON-RPC 2.0 envelope',
         durationMs: now() - t0,
       };
     }
     if (!isErrorResponse(parsed.data)) {
-      return { id, title, severity: 'should', status: 'pass', durationMs: now() - t0 };
+      return { id, title, severity, status: 'pass', durationMs: now() - t0 };
     }
     const code = parsed.data.error.code;
     const ok = ACCEPTABLE_ERROR_CODES.includes(code);
     return {
       id,
       title,
-      severity: 'should',
+      severity,
       status: ok ? 'pass' : 'fail',
       ...(ok
         ? {}
@@ -95,7 +96,7 @@ async function probePush(
     return {
       id,
       title,
-      severity: 'should',
+      severity,
       status: 'fail',
       message: redactInText(err instanceof Error ? err.message : String(err)),
       durationMs: now() - t0,
@@ -119,18 +120,25 @@ export async function pushNotificationChecks(
       },
     ];
   }
+  // Capability declared → false-advertising rule applies. Probes are
+  // promoted from SHOULD to MUST so an operator who claims push-config
+  // support but doesn't implement it lands in NON_COMPLIANT rather than
+  // collecting a warning and shipping anyway.
+  const severity: CheckResult['severity'] = 'must';
   return [
     await probePush(
       endpoint,
       'rpc.pushNotifications.set',
       `${methods.pushSet} responds with a well-formed error`,
       methods.pushSet,
+      severity,
     ),
     await probePush(
       endpoint,
       'rpc.pushNotifications.get',
       `${methods.pushGet} responds with a well-formed error`,
       methods.pushGet,
+      severity,
     ),
   ];
 }

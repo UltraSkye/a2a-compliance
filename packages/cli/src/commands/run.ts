@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { ComplianceReport, SnapshotDiff } from '@a2a-compliance/core';
+import type { Category, CheckResult, ComplianceReport, SnapshotDiff } from '@a2a-compliance/core';
 import {
   diffSnapshot,
   hasRegressions,
@@ -8,6 +8,7 @@ import {
   runFullChecks,
   toBadgeSvg,
   toJUnitXml,
+  toSarif,
   toSnapshot,
 } from '@a2a-compliance/core';
 import type { Command } from 'commander';
@@ -16,15 +17,28 @@ import pc from 'picocolors';
 import type { FailOn } from '../output.js';
 import { decideExit, printHuman } from '../output.js';
 
+const KNOWN_CATEGORIES: readonly Category[] = [
+  'card',
+  'protocol',
+  'methods',
+  'security',
+  'spec',
+  'auth',
+];
+
 interface RunOptions {
   json?: boolean;
   junit?: string;
   badge?: string;
+  sarif?: string;
   snapshot?: string;
   snapshotOut?: string;
   failOn?: FailOn;
   skipProtocol?: boolean;
   skipSecurity?: boolean;
+  skipAuth?: boolean;
+  category?: string[];
+  only?: string[];
 }
 
 export function registerRunCommand(program: Command): void {
@@ -36,6 +50,7 @@ export function registerRunCommand(program: Command): void {
     .option('--json', 'output report as JSON (to stdout)')
     .option('--junit <path>', 'also write a JUnit XML report to <path>')
     .option('--badge <path>', 'also write a Shields-style SVG badge to <path>')
+    .option('--sarif <path>', 'also write a SARIF 2.1.0 report to <path> for code-scanning')
     .option('--snapshot-out <path>', 'write a snapshot of the current compliance state to <path>')
     .option(
       '--snapshot <path>',
@@ -48,23 +63,33 @@ export function registerRunCommand(program: Command): void {
     )
     .option('--skip-protocol', 'skip live JSON-RPC checks (card-only run)')
     .option('--skip-security', 'skip SSRF/TLS/CORS security checks')
+    .option('--skip-auth', 'skip auth probe (anon-challenge + OAuth discovery)')
+    .option(
+      '--category <name...>',
+      'narrow output to one or more categories (card, protocol, methods, security, spec, auth)',
+    )
+    .option('--only <id...>', 'narrow output to specific check ids (exact match)')
     .action(async (url: string, opts: RunOptions) => {
-      const report = await runFullChecks(url, {
+      const full = await runFullChecks(url, {
         skipProtocol: opts.skipProtocol === true,
         skipSecurity: opts.skipSecurity === true,
+        skipAuth: opts.skipAuth === true,
       });
+
+      const report = applyFilters(full, opts);
 
       const diff = opts.snapshot ? compareSnapshot(report, opts.snapshot) : undefined;
 
       if (opts.json) {
         console.log(JSON.stringify(diff ? { ...report, snapshotDiff: diff } : report, null, 2));
       } else {
-        printHuman(report.target, report.checks);
+        printHuman(report.target, report.checks, report.summary.tier);
         if (diff) printDiff(diff);
       }
 
       if (opts.junit) writeArtefact('JUnit report', opts.junit, toJUnitXml(report), opts.json);
       if (opts.badge) writeArtefact('Badge SVG', opts.badge, toBadgeSvg(report), opts.json);
+      if (opts.sarif) writeArtefact('SARIF report', opts.sarif, toSarif(report), opts.json);
       if (opts.snapshotOut) {
         writeArtefact(
           'Snapshot',
@@ -79,6 +104,56 @@ export function registerRunCommand(program: Command): void {
       if (mode !== 'never' && diff && hasRegressions(diff)) exitCode = 1;
       process.exit(exitCode);
     });
+}
+
+function applyFilters(report: ComplianceReport, opts: RunOptions): ComplianceReport {
+  const cats = opts.category?.filter((c): c is Category =>
+    (KNOWN_CATEGORIES as readonly string[]).includes(c),
+  );
+  const ids = opts.only;
+  if (!cats?.length && !ids?.length) return report;
+
+  const kept = report.checks.filter((c: CheckResult) => {
+    const catOk = !cats?.length || (c.category !== undefined && cats.includes(c.category));
+    const idOk = !ids?.length || ids.includes(c.id);
+    return catOk && idOk;
+  });
+
+  return { ...report, checks: kept, summary: recomputeSummary(kept, report.summary.tier) };
+}
+
+function recomputeSummary(
+  checks: CheckResult[],
+  _fallbackTier: ComplianceReport['summary']['tier'],
+): ComplianceReport['summary'] {
+  // Re-tier over the filtered set — the subset's tier is more useful
+  // than carrying the full-run tier across a `--category security` slice.
+  let fail = 0;
+  let pass = 0;
+  let warn = 0;
+  let skip = 0;
+  for (const c of checks) {
+    if (c.status === 'pass') pass += 1;
+    else if (c.status === 'fail') fail += 1;
+    else if (c.status === 'warn') warn += 1;
+    else skip += 1;
+  }
+  return {
+    total: checks.length,
+    pass,
+    fail,
+    warn,
+    skip,
+    tier: tierLocal(checks),
+  };
+}
+
+function tierLocal(checks: CheckResult[]): ComplianceReport['summary']['tier'] {
+  if (checks.some((c) => c.severity === 'must' && c.status === 'fail')) return 'NON_COMPLIANT';
+  if (checks.some((c) => c.severity === 'should' && (c.status === 'fail' || c.status === 'warn')))
+    return 'MANDATORY';
+  if (checks.some((c) => c.status === 'skip' && c.severity !== 'info')) return 'RECOMMENDED';
+  return 'FULL_FEATURED';
 }
 
 // Snapshots are keyed by check id; real ones are a few hundred bytes. Cap at

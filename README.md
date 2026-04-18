@@ -7,8 +7,9 @@
 [![npm — core](https://img.shields.io/npm/v/%40a2a-compliance%2Fcore?label=%40a2a-compliance%2Fcore)](https://www.npmjs.com/package/@a2a-compliance/core)
 
 
-> Compliance test kit and validator for [A2A (Agent2Agent) protocol][a2a]
-> endpoints. Automated, CI-friendly, scriptable.
+> Operational compliance monitor for [A2A (Agent2Agent) protocol][a2a]
+> endpoints. Runs in CI, fits into GitHub code-scanning, flags
+> regressions before they ship.
 
 [a2a]: https://a2a-protocol.org/
 
@@ -16,30 +17,62 @@
 
 The A2A protocol maintainers reported that [real-world endpoint compliance
 is near zero][issue-1755] even though many sites now advertise A2A
-support. Today there is no automated way to verify whether an A2A endpoint
-actually implements the spec it claims to.
+support. Operators need a fast way to check whether the agent they just
+deployed still meets spec — and whether it stays that way across
+deployments.
 
-This project fills that gap: a portable test suite you can run against any
-A2A endpoint, locally or in CI, with machine-readable reports and a
-human-readable summary.
+`a2a-compliance` fills that gap. It is the **operational** side of A2A
+compliance: run it against any URL, get a graded verdict in seconds,
+wire the exit code into CI, surface regressions on PRs.
+
+If you are writing an **A2A SDK** (not deploying an agent), the official
+[`a2aproject/a2a-tck`][tck] is the authoritative conformance test kit.
+The two projects overlap intentionally, but cover different audiences:
+
+| | `a2a-compliance` | `a2aproject/a2a-tck` |
+|---|---|---|
+| Audience | Operators, platforms, CI | SDK authors |
+| Install | `npx @a2a-compliance/cli` — 30 s | `git clone`, Python venv, YAML config |
+| Output | JSON, JUnit, SARIF, SVG badge, snapshot diff | JSON compliance report |
+| Regression tracking | ✅ snapshot baseline + CI gate | — |
+| CI integration | GitHub Action + SARIF → code-scanning | pytest |
+| Security probes | ✅ SSRF, TLS, CORS, DNS-rebinding pin, auth-challenge | — |
+| Compliance tiering | `NON_COMPLIANT` / `MANDATORY` / `RECOMMENDED` / `FULL_FEATURED` | `NON_COMPLIANT` / `MANDATORY` / `RECOMMENDED` / `FULL_FEATURED` |
+| Transport coverage (today) | JSON-RPC 2.0 (v0.3 + v1.0) | JSON-RPC, gRPC, REST |
+
+Short version: **TCK certifies your SDK. `a2a-compliance` monitors your
+deployment.**
 
 [issue-1755]: https://github.com/a2aproject/A2A/issues/1755
+[tck]: https://github.com/a2aproject/a2a-tck
 
 ## What it checks
 
 - **Agent Card** — reachability at `/.well-known/agent-card.json`, valid
   JSON, conformance to the Zod schema, Content-Type, URL shape, skills
   presence, declared `protocolVersion`.
-- **JSON-RPC 2.0 envelope** — parse-error, invalid-request, method-not-found.
+- **JSON-RPC 2.0 envelope** — parse-error, invalid-request, method-not-found,
+  batch handling.
 - **A2A method set** — `message/send` / `tasks/send`, `message/stream` /
   `tasks/sendSubscribe`, `tasks/get`, `tasks/cancel`, `tasks/resubscribe`,
   push-notification config round-trip. Probe method names adapt to the
   `protocolVersion` declared by the card (v0.3 and v1.0 today).
+  Capability-gated checks promote to MUST when the card declares the
+  capability — false-advertising detection.
+- **Auth** — anon-challenge probe (expect 401+`WWW-Authenticate` or typed
+  JSON-RPC error when a non-`none` scheme is declared), OAuth/OIDC
+  discovery reachability.
 - **Security** — SSRF probe on every URL in the card, HTTPS enforcement,
-  CORS wildcard-with-credentials, redirect-chain SSRF re-check.
+  CORS wildcard-with-credentials, redirect-chain SSRF re-check,
+  DNS-rebinding pinning in the HTTP client.
+
+For the full threat catalog tied back to checks, see
+[`docs/A2A_SECURITY_TOP_10.md`](./docs/A2A_SECURITY_TOP_10.md).
 
 See [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) for the full
-check-id taxonomy and roadmap.
+check-id taxonomy. `npx @a2a-compliance/cli list` prints every check
+id at runtime; `npx @a2a-compliance/cli explain <id>` prints full
+docs with spec references.
 
 ## Quick start — no install
 
@@ -62,12 +95,19 @@ npx @a2a-compliance/cli run <url> --json > report.json
 # JUnit XML — drops straight into GitHub Actions / GitLab / Jenkins
 npx @a2a-compliance/cli run <url> --junit ./report.junit.xml
 
+# SARIF 2.1.0 — upload to GitHub code-scanning for PR annotations
+npx @a2a-compliance/cli run <url> --sarif ./report.sarif
+
 # Shields-style SVG badge for your README
 npx @a2a-compliance/cli run <url> --badge ./badge.svg
 
 # Snapshot the current compliance state and fail later on regressions
 npx @a2a-compliance/cli run <url> --snapshot-out ./baseline.json
 npx @a2a-compliance/cli run <url> --snapshot    ./baseline.json
+
+# Narrow to one category / set of ids
+npx @a2a-compliance/cli run <url> --category security --category auth
+npx @a2a-compliance/cli run <url> --only sec.ssrf --only sec.tls.https
 ```
 
 Exit-code policy is controlled by `--fail-on`:
@@ -92,6 +132,18 @@ Snapshot regressions always fail the build unless `--fail-on never`.
 
 Drop-in workflows for GitHub Actions, GitLab CI, and CircleCI live in
 [`examples/ci-integrations/`](./examples/ci-integrations).
+
+## Run against the reference agent
+
+The repo ships a minimal, spec-compliant A2A agent under
+`examples/reference-agent/` — zero runtime dependencies, starts in under
+a second. Useful for local sanity-checks and for dogfooding `run` end-to-end:
+
+```bash
+node examples/reference-agent/server.js &
+npx @a2a-compliance/cli run http://localhost:8080 --skip-security
+# → 16 passed, tier: FULL_FEATURED
+```
 
 ## Interactive dashboard
 

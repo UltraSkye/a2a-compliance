@@ -182,5 +182,111 @@ export async function jsonRpcChecks(
     }),
   );
 
+  results.push(await batchCheck(endpoint));
+
   return results;
+}
+
+/**
+ * Probe a JSON-RPC batch. Per spec (https://www.jsonrpc.org/specification#batch)
+ * batch support is optional; the server MAY answer with an array of responses
+ * (happy path) or reject the batch with a single -32600 Invalid Request
+ * response. Either is fine. What's not fine: stalling, returning a single
+ * unwrapped response, or returning malformed JSON — all of those break
+ * spec-compliant batch clients in subtle ways.
+ */
+async function batchCheck(endpoint: string): Promise<CheckResult> {
+  const t0 = now();
+  const id = 'rpc.batch';
+  const title = 'Handles a JSON-RPC batch request';
+  const body = JSON.stringify([
+    { jsonrpc: '2.0', id: 1, method: 'compliance.probe.nonexistent' },
+    { jsonrpc: '2.0', id: 2, method: 'compliance.probe.nonexistent' },
+  ]);
+  try {
+    const res = await fetchWithTimeout(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+    const text = await readCappedText(res);
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return {
+        id,
+        title,
+        severity: 'should',
+        status: 'fail',
+        message: `batch response is not valid JSON (HTTP ${res.status})`,
+        durationMs: now() - t0,
+      };
+    }
+
+    if (Array.isArray(json)) {
+      const allValid = json.every((item) => JsonRpcResponseSchema.safeParse(item).success);
+      if (!allValid) {
+        return {
+          id,
+          title,
+          severity: 'should',
+          status: 'fail',
+          message: 'batch response array contains non-JSON-RPC items',
+          durationMs: now() - t0,
+        };
+      }
+      const ids = json.map((item) => (item as { id?: unknown }).id).filter((v) => v !== undefined);
+      const matched = ids.includes(1) && ids.includes(2);
+      return {
+        id,
+        title,
+        severity: 'should',
+        status: matched ? 'pass' : 'warn',
+        ...(matched ? {} : { message: 'batch response ids do not match request ids' }),
+        durationMs: now() - t0,
+      };
+    }
+
+    const parsed = JsonRpcResponseSchema.safeParse(json);
+    if (parsed.success && isErrorResponse(parsed.data)) {
+      const code = parsed.data.error.code;
+      if (code === JsonRpcErrorCode.InvalidRequest) {
+        return {
+          id,
+          title,
+          severity: 'should',
+          status: 'pass',
+          message: 'server rejects batch with -32600 — acceptable per spec',
+          durationMs: now() - t0,
+        };
+      }
+      return {
+        id,
+        title,
+        severity: 'should',
+        status: 'warn',
+        message: `single response to batch with error code ${code} — spec calls for array or -32600`,
+        durationMs: now() - t0,
+      };
+    }
+
+    return {
+      id,
+      title,
+      severity: 'should',
+      status: 'fail',
+      message: 'batch request got a single non-array response — spec-compliant clients will break',
+      durationMs: now() - t0,
+    };
+  } catch (err) {
+    return {
+      id,
+      title,
+      severity: 'should',
+      status: 'fail',
+      message: redactInText(err instanceof Error ? err.message : String(err)),
+      durationMs: now() - t0,
+    };
+  }
 }

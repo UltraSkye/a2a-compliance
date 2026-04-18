@@ -1,11 +1,13 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
 import {
   agentCardChecks,
+  authProbeChecks,
   cardSsrfChecks,
   jsonRpcChecks,
   methodChecks,
   pushNotificationChecks,
 } from './assertions/index.js';
+import { decorateAll } from './decorate.js';
 import { fetchWithTimeout, readCappedJson } from './http.js';
 import { redactUrl } from './redact.js';
 import type { CheckResult, ComplianceReport } from './report.js';
@@ -17,6 +19,7 @@ export interface RunOptions {
   specVersion?: string;
   skipProtocol?: boolean;
   skipSecurity?: boolean;
+  skipAuth?: boolean;
 }
 
 export async function runCardChecks(
@@ -24,7 +27,7 @@ export async function runCardChecks(
   opts: RunOptions = {},
 ): Promise<ComplianceReport> {
   const startedAt = new Date().toISOString();
-  const checks = await agentCardChecks(baseUrl);
+  const checks = decorateAll(await agentCardChecks(baseUrl));
   const finishedAt = new Date().toISOString();
 
   return {
@@ -64,18 +67,22 @@ export async function runFullChecks(
     !opts.skipProtocol && discovery
       ? [
           ...(await jsonRpcChecks(discovery.endpoint, methods)),
-          ...(await methodChecks(discovery.endpoint, methods)),
+          ...(await methodChecks(discovery.endpoint, methods, {
+            streaming: discovery.streaming === true,
+          })),
           ...(await pushNotificationChecks(baseUrl, discovery.endpoint, methods)),
         ]
       : [];
   const securityResults = opts.skipSecurity ? [] : await cardSsrfChecks(baseUrl);
+  const authResults = opts.skipAuth ? [] : await authProbeChecks(baseUrl, methods);
 
-  const checks = [
+  const checks = decorateAll([
     ...cardResults,
     ...(versionCheck ? [versionCheck] : []),
     ...protocolResults,
     ...securityResults,
-  ];
+    ...authResults,
+  ]);
   const finishedAt = new Date().toISOString();
 
   return {
@@ -91,6 +98,8 @@ export async function runFullChecks(
 interface Discovery {
   endpoint: string;
   protocolVersion: string | undefined;
+  streaming: boolean | undefined;
+  pushNotifications: boolean | undefined;
 }
 
 async function discover(baseUrl: string): Promise<Discovery | undefined> {
@@ -103,6 +112,8 @@ async function discover(baseUrl: string): Promise<Discovery | undefined> {
     return {
       endpoint: parsed.data.url,
       protocolVersion: parsed.data.protocolVersion,
+      streaming: parsed.data.capabilities.streaming,
+      pushNotifications: parsed.data.capabilities.pushNotifications,
     };
   } catch {
     return undefined;

@@ -25,7 +25,7 @@ export function registerCardCommand(program: Command): void {
       if (opts.json) {
         console.log(JSON.stringify(report, null, 2));
       } else {
-        printHuman(report.target, report.checks);
+        printHuman(report.target, report.checks, report.summary.tier);
       }
 
       process.exit(decideExit(report.checks, opts.failOn ?? 'must'));

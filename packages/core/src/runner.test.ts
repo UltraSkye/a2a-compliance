@@ -11,7 +11,7 @@ describe('summarize', () => {
       { id: 'd', title: 'd', severity: 'info', status: 'skip', durationMs: 0 },
       { id: 'e', title: 'e', severity: 'must', status: 'pass', durationMs: 0 },
     ]);
-    expect(out).toEqual({ total: 5, pass: 2, fail: 1, warn: 1, skip: 1 });
+    expect(out).toEqual({ total: 5, pass: 2, fail: 1, warn: 1, skip: 1, tier: 'NON_COMPLIANT' });
   });
 });
 

@@ -39,3 +39,18 @@ services:
     volumes:
       - ./examples/mock-agents/broken:/usr/share/nginx/html:ro
     restart: unless-stopped
+
+  # Known-compliant A2A agent — our own dogfood target. Serves both the
+  # agent card and the JSON-RPC endpoint, so `a2a-compliance run` can
+  # exercise the full probe chain and is expected to land in
+  # FULL_FEATURED tier against this one.
+  reference-agent:
+    profiles: [demo]
+    build:
+      context: ./examples/reference-agent
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8080"
+      PUBLIC_BASE: "http://localhost:${A2A_REF_PORT:-8004}"
+    ports: ["127.0.0.1:${A2A_REF_PORT:-8004}:8080"]
+    restart: unless-stopped
