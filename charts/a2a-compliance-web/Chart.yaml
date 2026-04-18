@@ -2,8 +2,8 @@ apiVersion: v2
 name: a2a-compliance-web
 description: Next.js dashboard for running A2A (Agent2Agent) protocol compliance checks interactively. Refuses private-space targets at the ingress — same SSRF guard the CLI uses.
 type: application
-version: 0.3.0
-appVersion: "0.3.0"
+version: 0.3.2
+appVersion: "0.3.2"
 keywords:
   - a2a
   - agent2agent

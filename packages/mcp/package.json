@@ -1,6 +1,6 @@
 {
   "name": "@a2a-compliance/mcp",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Model Context Protocol (MCP) server for the A2A (Agent2Agent) protocol compliance test kit. Lets Claude Desktop, Cursor, Codex, and other MCP clients invoke run_compliance / validate_agent_card / list_checks / explain_check / ssrf_check_url as native tools.",
   "keywords": [
     "a2a",
