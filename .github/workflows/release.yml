@@ -28,9 +28,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      # Build must precede typecheck: core consumes the dist/*.d.ts of
+      # schemas as a workspace dependency; tsc --noEmit on a fresh
+      # checkout would otherwise fail with TS2307.
+      - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm build
 
       # Pre-flight: inspect what each tarball would actually contain.
       # Catches accidents like missing LICENSE, leaked tests, wrong file list —
