@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ComplianceReport, SnapshotDiff } from '@a2a-compliance/core';
 import {
@@ -107,9 +107,13 @@ function writeArtefact(
 }
 
 function compareSnapshot(report: ComplianceReport, path: string): SnapshotDiff {
-  let stats: ReturnType<typeof statSync>;
+  // One syscall (read) rather than stat-then-read avoids the filesystem
+  // TOCTOU race CodeQL flags on js/file-system-race. The cap is then
+  // applied to the bytes we actually hold, so an attacker swapping the
+  // file mid-operation can't get us to accept oversized content.
+  let raw: string;
   try {
-    stats = statSync(path);
+    raw = readFileSync(path, 'utf8');
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') {
@@ -122,12 +126,12 @@ function compareSnapshot(report: ComplianceReport, path: string): SnapshotDiff {
     }
     throw err;
   }
-  if (stats.size > MAX_SNAPSHOT_BYTES) {
+  const byteSize = Buffer.byteLength(raw, 'utf8');
+  if (byteSize > MAX_SNAPSHOT_BYTES) {
     throw new Error(
-      `snapshot file ${path} is ${stats.size} bytes, above the ${MAX_SNAPSHOT_BYTES}-byte cap`,
+      `snapshot file ${path} is ${byteSize} bytes, above the ${MAX_SNAPSHOT_BYTES}-byte cap`,
     );
   }
-  const raw = readFileSync(path, 'utf8');
   let data: unknown;
   try {
     data = JSON.parse(raw);

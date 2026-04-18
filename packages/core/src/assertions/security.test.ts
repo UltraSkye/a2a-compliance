@@ -94,8 +94,8 @@ describe('cardSsrfChecks', () => {
     expect(ids.filter((i) => i === 'sec.tls.https')).toHaveLength(1);
     expect(ids.filter((i) => i === 'sec.ssrf')).toHaveLength(1);
     expect(results.find((r) => r.id === 'sec.tls.https')?.status).toBe('fail');
-    expect(results.find((r) => r.id === 'sec.tls.https')?.message).toMatch(
-      /provider\.example\.com/,
+    expect(results.find((r) => r.id === 'sec.tls.https')?.message).toContain(
+      'provider.example.com',
     );
     expect(results.find((r) => r.id === 'sec.ssrf')?.status).toBe('pass');
   });
