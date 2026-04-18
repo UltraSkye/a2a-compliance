@@ -1,0 +1,73 @@
+{
+  "name": "@a2a-compliance/mcp",
+  "version": "0.3.0",
+  "description": "Model Context Protocol (MCP) server for the A2A (Agent2Agent) protocol compliance test kit. Lets Claude Desktop, Cursor, Codex, and other MCP clients invoke run_compliance / validate_agent_card / list_checks / explain_check / ssrf_check_url as native tools.",
+  "keywords": [
+    "a2a",
+    "a2a-protocol",
+    "a2a-compliance",
+    "a2a-mcp",
+    "agent2agent",
+    "agent-card",
+    "agent-protocol",
+    "ai-agent",
+    "ai-agents",
+    "llm-agent",
+    "llm-tools",
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "claude-desktop",
+    "claude",
+    "cursor",
+    "codex",
+    "google-a2a",
+    "compliance",
+    "validator",
+    "security",
+    "ssrf"
+  ],
+  "license": "MIT",
+  "author": "a2a-compliance contributors",
+  "homepage": "https://github.com/UltraSkye/a2a-compliance#readme",
+  "bugs": "https://github.com/UltraSkye/a2a-compliance/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/UltraSkye/a2a-compliance.git",
+    "directory": "packages/mcp"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.10.0"
+  },
+  "type": "module",
+  "bin": {
+    "a2a-compliance-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@a2a-compliance/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.4"
+  }
+}

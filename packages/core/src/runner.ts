@@ -14,6 +14,7 @@ import type { CheckResult, ComplianceReport } from './report.js';
 import { summarize } from './report.js';
 import type { SpecVersion } from './spec.js';
 import { KNOWN_SPEC_VERSIONS, methodsFor, resolveSpecVersion } from './spec.js';
+import { withRunSpan } from './telemetry.js';
 
 export interface RunOptions {
   specVersion?: string;
@@ -26,18 +27,20 @@ export async function runCardChecks(
   baseUrl: string,
   opts: RunOptions = {},
 ): Promise<ComplianceReport> {
-  const startedAt = new Date().toISOString();
-  const checks = decorateAll(await agentCardChecks(baseUrl));
-  const finishedAt = new Date().toISOString();
+  return withRunSpan(baseUrl, async () => {
+    const startedAt = new Date().toISOString();
+    const checks = decorateAll(await agentCardChecks(baseUrl));
+    const finishedAt = new Date().toISOString();
 
-  return {
-    target: redactUrl(baseUrl),
-    specVersion: opts.specVersion ?? '1.0',
-    startedAt,
-    finishedAt,
-    checks,
-    summary: summarize(checks),
-  };
+    return {
+      target: redactUrl(baseUrl),
+      specVersion: opts.specVersion ?? '1.0',
+      startedAt,
+      finishedAt,
+      checks,
+      summary: summarize(checks),
+    };
+  });
 }
 
 /**
@@ -49,6 +52,10 @@ export async function runFullChecks(
   baseUrl: string,
   opts: RunOptions = {},
 ): Promise<ComplianceReport> {
+  return withRunSpan(baseUrl, () => runFullChecksImpl(baseUrl, opts));
+}
+
+async function runFullChecksImpl(baseUrl: string, opts: RunOptions): Promise<ComplianceReport> {
   const startedAt = new Date().toISOString();
 
   const cardResults = await agentCardChecks(baseUrl);

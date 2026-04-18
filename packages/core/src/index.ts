@@ -28,3 +28,4 @@ export {
   SnapshotSchema,
   toSnapshot,
 } from './snapshot.js';
+export { withCheckSpan, withRunSpan } from './telemetry.js';

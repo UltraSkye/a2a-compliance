@@ -110,6 +110,13 @@ npx @a2a-compliance/cli run https://your-agent.example.com
 # without Node — same thing via a signed, multi-arch container
 docker run --rm ghcr.io/ultraskye/a2a-compliance-cli:latest \
   run https://your-agent.example.com
+
+# Homebrew (macOS / Linux)
+brew install UltraSkye/a2a-compliance/a2a-compliance
+a2a-compliance run https://your-agent.example.com
+
+# Standalone binary (no runtime at all) — grab from GitHub releases
+# https://github.com/UltraSkye/a2a-compliance/releases/latest
 ```
 
 Card-only (faster, no live probes):
@@ -214,6 +221,43 @@ RFC 1918, link-local, cloud metadata, localhost) so the container can't
 be turned into an SSRF proxy against its deployer's internal network.
 See [`SECURITY.md`](./SECURITY.md) for the full threat model.
 
+## Model Context Protocol (MCP)
+
+`@a2a-compliance/mcp` exposes the probe + catalog as native tools for
+Claude Desktop, Cursor, Codex, Cline, Windsurf, Continue — any
+MCP-capable client. Add this to your client's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "a2a-compliance": {
+      "command": "npx",
+      "args": ["-y", "@a2a-compliance/mcp"]
+    }
+  }
+}
+```
+
+Tools exposed: `run_compliance`, `validate_agent_card`, `list_checks`,
+`explain_check`, `ssrf_check_url`. See
+[`packages/mcp/README.md`](./packages/mcp/README.md).
+
+## OpenTelemetry (opt-in)
+
+Core emits spans per check and a parent span per run when
+`@opentelemetry/api` is available in the process. Install the SDK
+yourself and point at your collector:
+
+```bash
+npm i @opentelemetry/api @opentelemetry/sdk-node \
+      @opentelemetry/auto-instrumentations-node \
+      @opentelemetry/exporter-trace-otlp-http
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel.example.com:4318
+node -r @opentelemetry/auto-instrumentations-node/register ./my-probe.js
+```
+
+Zero-dep users pay nothing — core falls through to the no-op path.
+
 ## Use as a library
 
 Everything the CLI does is exposed programmatically:
@@ -248,8 +292,9 @@ pnpm workspace monorepo.
 | Package | Description |
 |---------|-------------|
 | [`packages/schemas`](./packages/schemas) | Zod schemas for the A2A spec |
-| [`packages/core`](./packages/core)       | Assertion engine + reporters (JSON, JUnit, badge SVG, snapshot) |
+| [`packages/core`](./packages/core)       | Assertion engine + reporters (JSON, JUnit, SARIF, badge SVG, snapshot) |
 | [`packages/cli`](./packages/cli)         | `a2a-compliance` command-line |
+| [`packages/mcp`](./packages/mcp)         | Model Context Protocol server — native tool surface for MCP clients |
 | [`apps/web`](./apps/web)                 | Next.js 15 dashboard |
 | [`apps/action`](./apps/action)           | GitHub composite Action |
 
