@@ -32,11 +32,14 @@ jobs:
       # surface in logs without failing the build.
       - run: pnpm audit --audit-level=moderate
       - run: pnpm lint
+      # Build must come before typecheck: the core package consumes
+      # @a2a-compliance/schemas via its compiled dist/*.d.ts, and tsc
+      # --noEmit against an unbuilt workspace fails with TS2307.
+      - run: pnpm build
       - run: pnpm typecheck
       # Web typecheck folded into the main job so regressions fail fast
       # in the Node-matrix run rather than the separate web job.
       - run: pnpm --filter @a2a-compliance/web typecheck
-      - run: pnpm build
       - run: pnpm test
       # Coverage thresholds per package are pinned in each package's
       # vitest.config.ts — this step fails the build on regression.
