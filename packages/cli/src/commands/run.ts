@@ -39,6 +39,7 @@ interface RunOptions {
   skipAuth?: boolean;
   category?: string[];
   only?: string[];
+  problemMatcher?: boolean;
 }
 
 export function registerRunCommand(program: Command): void {
@@ -69,6 +70,10 @@ export function registerRunCommand(program: Command): void {
       'narrow output to one or more categories (card, protocol, methods, security, spec, auth)',
     )
     .option('--only <id...>', 'narrow output to specific check ids (exact match)')
+    .option(
+      '--problem-matcher',
+      'emit ::a2a:: lines the GitHub problem matcher at .github/problem-matchers/a2a-compliance.json can turn into PR annotations',
+    )
     .action(async (url: string, opts: RunOptions) => {
       const full = await runFullChecks(url, {
         skipProtocol: opts.skipProtocol === true,
@@ -85,6 +90,10 @@ export function registerRunCommand(program: Command): void {
       } else {
         printHuman(report.target, report.checks, report.summary.tier);
         if (diff) printDiff(diff);
+      }
+
+      if (opts.problemMatcher) {
+        for (const line of toProblemMatcherLines(report)) console.log(line);
       }
 
       if (opts.junit) writeArtefact('JUnit report', opts.junit, toJUnitXml(report), opts.json);
@@ -104,6 +113,33 @@ export function registerRunCommand(program: Command): void {
       if (mode !== 'never' && diff && hasRegressions(diff)) exitCode = 1;
       process.exit(exitCode);
     });
+}
+
+// Emit one line per non-pass check in the format expected by
+// `.github/problem-matchers/a2a-compliance.json`. Operators enable
+// the matcher with `echo "::add-matcher::.github/problem-matchers/a2a-compliance.json"`
+// in their workflow before running this command; GitHub then turns
+// each line into a PR annotation.
+function toProblemMatcherLines(report: ComplianceReport): string[] {
+  const lines: string[] = [];
+  for (const c of report.checks) {
+    if (c.status === 'pass' || c.status === 'skip') continue;
+    const severity =
+      c.status === 'fail' && c.severity === 'must'
+        ? 'error'
+        : c.status === 'fail' || c.status === 'warn'
+          ? 'warning'
+          : 'notice';
+    // The `file:line:col` triple doesn't map cleanly to an agent URL —
+    // we encode the target URL as a pseudo-file so clicking the
+    // annotation in GitHub opens nothing local (there's no sidecar
+    // source to highlight), but the annotation stays associated with
+    // the right logical "file" (the agent itself).
+    const file = report.target;
+    const msg = (c.message ?? c.title).replace(/[\r\n]+/g, ' ');
+    lines.push(`::a2a::${severity}::${c.id}::${file}:1:1::${msg}`);
+  }
+  return lines;
 }
 
 function applyFilters(report: ComplianceReport, opts: RunOptions): ComplianceReport {

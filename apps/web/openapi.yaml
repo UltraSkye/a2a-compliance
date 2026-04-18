@@ -1,0 +1,195 @@
+openapi: 3.1.0
+info:
+  title: a2a-compliance dashboard API
+  version: 0.3.0
+  summary: HTTP surface of the `apps/web` Next.js dashboard — one endpoint that probes an A2A (Agent2Agent) protocol target and returns a `ComplianceReport`.
+  description: |
+    This document describes the public HTTP ingress of the hosted A2A
+    compliance dashboard. Clients (typically the dashboard's own React
+    form, but also programmatic consumers) POST a URL and get back a
+    full compliance report — the same shape
+    `@a2a-compliance/core` emits from `runFullChecks()`.
+
+    The ingress refuses private-space targets (loopback, RFC 1918,
+    link-local including cloud-metadata, CGNAT, ULA) before dispatching
+    the probe so the hosted dashboard can't be turned into an SSRF
+    proxy against its own network. The SSRF guard is intentionally
+    terse in its response so the API doesn't leak resolved IPs.
+
+    For non-hosted use, run the CLI (`@a2a-compliance/cli`) locally —
+    it trusts operator-supplied URLs by design and doesn't apply the
+    ingress guard.
+
+  license:
+    name: MIT
+    url: https://github.com/UltraSkye/a2a-compliance/blob/main/LICENSE
+  contact:
+    name: a2a-compliance contributors
+    url: https://github.com/UltraSkye/a2a-compliance/issues
+
+servers:
+  - url: http://localhost:3000
+    description: Local dashboard (docker compose up).
+  - url: https://a2a.example.com
+    description: Example hosted deployment — substitute your own.
+
+paths:
+  /api/check:
+    post:
+      summary: Probe an A2A endpoint and return a ComplianceReport.
+      operationId: runCompliance
+      tags: [compliance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckRequest'
+            examples:
+              happy:
+                value: { url: "https://agent.example.com" }
+      responses:
+        '200':
+          description: Compliance report.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: [no-store]
+              description: Reports contain agent metadata and are never cached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplianceReport'
+        '400':
+          description: Invalid input, malformed URL, oversized body, or an SSRF-refused target.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ssrf:
+                  value:
+                    error: target URL not permitted (resolved to private or non-routable space)
+                tooLong:
+                  value:
+                    error: url too long
+        '413':
+          description: Request body exceeded the 8 KB cap.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Probe failed — upstream error, DNS failure, timeout. Error messages are URL-redacted before reaching the client.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    CheckRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Base URL of the A2A endpoint. The probe appends `/.well-known/agent-card.json` for discovery.
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable, URL-redacted error message.
+
+    Severity:
+      type: string
+      enum: [must, should, info]
+      description: RFC 2119-style severity of the check.
+
+    CheckStatus:
+      type: string
+      enum: [pass, fail, warn, skip]
+
+    Category:
+      type: string
+      enum: [card, protocol, methods, security, spec, auth]
+
+    ComplianceTier:
+      type: string
+      enum: [NON_COMPLIANT, MANDATORY, RECOMMENDED, FULL_FEATURED]
+
+    SpecRef:
+      type: object
+      required: [section, url]
+      properties:
+        section:
+          type: string
+        url:
+          type: string
+          format: uri
+
+    CheckResult:
+      type: object
+      required: [id, title, severity, status, durationMs]
+      properties:
+        id:
+          type: string
+          description: Stable dotted identifier, e.g. `sec.ssrf`.
+        title:
+          type: string
+        category:
+          $ref: '#/components/schemas/Category'
+        severity:
+          $ref: '#/components/schemas/Severity'
+        status:
+          $ref: '#/components/schemas/CheckStatus'
+        specRef:
+          $ref: '#/components/schemas/SpecRef'
+        message:
+          type: string
+        evidence:
+          description: Free-form diagnostic payload. Shape varies by check.
+        durationMs:
+          type: number
+          minimum: 0
+
+    ComplianceSummary:
+      type: object
+      required: [total, pass, fail, warn, skip, tier]
+      properties:
+        total:   { type: integer, minimum: 0 }
+        pass:    { type: integer, minimum: 0 }
+        fail:    { type: integer, minimum: 0 }
+        warn:    { type: integer, minimum: 0 }
+        skip:    { type: integer, minimum: 0 }
+        tier:    { $ref: '#/components/schemas/ComplianceTier' }
+
+    ComplianceReport:
+      type: object
+      required: [target, specVersion, startedAt, finishedAt, checks, summary]
+      properties:
+        target:
+          type: string
+          description: URL-redacted form of the probe target.
+        specVersion:
+          type: string
+          description: Resolved A2A protocol version.
+          example: '1.0'
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckResult'
+        summary:
+          $ref: '#/components/schemas/ComplianceSummary'
