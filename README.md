@@ -3,13 +3,8 @@
 [![CI](https://github.com/UltraSkye/a2a-compliance/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/UltraSkye/a2a-compliance/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/UltraSkye/a2a-compliance/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/UltraSkye/a2a-compliance/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-
-<!--
-  After the first successful release, re-add the npm version badges:
-
-  [![npm — cli](https://img.shields.io/npm/v/%40a2a-compliance%2Fcli?label=%40a2a-compliance%2Fcli)](https://www.npmjs.com/package/@a2a-compliance/cli)
-  [![npm — core](https://img.shields.io/npm/v/%40a2a-compliance%2Fcore?label=%40a2a-compliance%2Fcore)](https://www.npmjs.com/package/@a2a-compliance/core)
--->
+[![npm — cli](https://img.shields.io/npm/v/%40a2a-compliance%2Fcli?label=%40a2a-compliance%2Fcli)](https://www.npmjs.com/package/@a2a-compliance/cli)
+[![npm — core](https://img.shields.io/npm/v/%40a2a-compliance%2Fcore?label=%40a2a-compliance%2Fcore)](https://www.npmjs.com/package/@a2a-compliance/core)
 
 
 > Compliance test kit and validator for [A2A (Agent2Agent) protocol][a2a]
