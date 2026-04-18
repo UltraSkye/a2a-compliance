@@ -41,13 +41,13 @@ jobs:
       - name: Preflight — inspect tarball contents
         run: |
           set -e
-          for pkg in schemas core cli; do
+          for pkg in schemas core cli mcp; do
             echo "::group::@a2a-compliance/$pkg pack contents"
             (cd packages/$pkg && pnpm pack --pack-destination /tmp --dry-run)
             echo "::endgroup::"
           done
           # Hard fail if anyone's tarball forgot LICENSE.
-          for pkg in schemas core cli; do
+          for pkg in schemas core cli mcp; do
             pnpm --filter @a2a-compliance/$pkg pack --pack-destination /tmp > /tmp/pack.log
             tgz=$(ls /tmp/a2a-compliance-$pkg-*.tgz | head -1)
             if ! tar tzf "$tgz" | grep -q 'package/LICENSE'; then
@@ -73,6 +73,11 @@ jobs:
 
       - name: Publish @a2a-compliance/cli
         run: pnpm --filter @a2a-compliance/cli publish --no-git-checks --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @a2a-compliance/mcp
+        run: pnpm --filter @a2a-compliance/mcp publish --no-git-checks --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

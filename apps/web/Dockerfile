@@ -12,19 +12,22 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/schemas/package.json packages/schemas/
 COPY packages/core/package.json    packages/core/
 COPY packages/cli/package.json     packages/cli/
+COPY packages/mcp/package.json     packages/mcp/
 COPY apps/web/package.json         apps/web/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile \
+      --filter '@a2a-compliance/web...'
 
 # ---- Stage 3: build core packages + web app ----
 FROM deps AS builder
 COPY tsconfig.base.json biome.json ./
 COPY packages packages
 COPY apps/web apps/web
-# Next.js uses outputFileTracingRoot to find workspace packages; building
-# the workspace packages first gives the tracer something to resolve.
-RUN pnpm -r --filter=./packages/* build \
- && pnpm --filter @a2a-compliance/web build
+# Build only what `web` transitively depends on. The mcp package is
+# kept out of the graph because its @modelcontextprotocol/sdk + zod
+# deps aren't installed in this image (the deps stage filtered to
+# `@a2a-compliance/web...`).
+RUN pnpm --filter '@a2a-compliance/web...' build
 
 # ---- Stage 4: minimal runtime image ----
 FROM node:24-bookworm-slim AS runner

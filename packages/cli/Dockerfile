@@ -35,7 +35,12 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 FROM deps AS builder
 COPY tsconfig.base.json ./
 COPY packages packages
-RUN pnpm -r --filter=./packages/* build
+# `--filter @a2a-compliance/cli...` builds the CLI plus its transitive
+# workspace deps (schemas + core) — explicitly not the mcp package,
+# whose deps (@modelcontextprotocol/sdk, zod) aren't installed in this
+# image. A bare `pnpm -r --filter=./packages/* build` would try to
+# compile mcp and fail on missing modules.
+RUN pnpm --filter '@a2a-compliance/cli...' build
 # pnpm deploy produces a self-contained node_modules tree pointing at
 # the built dist/ of every workspace dep — the runtime image doesn't
 # need pnpm or the monorepo.

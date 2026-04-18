@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning: [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-04-18
+
+### Fixed
+
+- **`packages/cli/Dockerfile`** — restricted the build step from
+  `pnpm -r --filter=./packages/* build` to
+  `pnpm --filter '@a2a-compliance/cli...' build`. The wildcard tried
+  to compile the new mcp package whose `@modelcontextprotocol/sdk`
+  and `zod` deps weren't installed in the CLI image (the install
+  step had already filtered them out), blocking multi-arch image
+  publishing on the v0.3.0 tag.
+- **`apps/web/Dockerfile`** — same fix: build scoped to
+  `@a2a-compliance/web...`. Also added the missing
+  `packages/mcp/package.json` COPY so pnpm's frozen-lockfile check
+  doesn't fall back to an unlocked resolution path.
+- **`.github/workflows/release.yml`** — added
+  `@a2a-compliance/mcp` to the npm publish list. v0.3.0 shipped the
+  package on the filesystem but the release workflow predated it
+  and skipped publishing.
+
+### Bumped
+
+- `@a2a-compliance/schemas` → 0.3.1
+- `@a2a-compliance/core` → 0.3.1
+- `@a2a-compliance/cli` → 0.3.1
+- `@a2a-compliance/mcp` → 0.3.1
+
 ## [0.3.0] - 2026-04-18
 
 ### Added — packaging + distribution
