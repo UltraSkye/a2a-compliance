@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![npm — cli](https://img.shields.io/npm/v/%40a2a-compliance%2Fcli?label=%40a2a-compliance%2Fcli)](https://www.npmjs.com/package/@a2a-compliance/cli)
 [![npm — core](https://img.shields.io/npm/v/%40a2a-compliance%2Fcore?label=%40a2a-compliance%2Fcore)](https://www.npmjs.com/package/@a2a-compliance/core)
+[![ghcr — cli](https://ghcr-badge.egpl.dev/ultraskye/a2a-compliance-cli/latest_tag?trim=major&label=ghcr%20cli)](https://github.com/UltraSkye/a2a-compliance/pkgs/container/a2a-compliance-cli)
+[![Open in Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-2ea44f?logo=github)](https://codespaces.new/UltraSkye/a2a-compliance?quickstart=1)
 
 
 > **Automated compliance test kit + security audit for [A2A (Agent2Agent)
@@ -102,13 +104,34 @@ docs with spec references.
 ## Quick start — no install
 
 ```bash
+# with Node installed
 npx @a2a-compliance/cli run https://your-agent.example.com
+
+# without Node — same thing via a signed, multi-arch container
+docker run --rm ghcr.io/ultraskye/a2a-compliance-cli:latest \
+  run https://your-agent.example.com
 ```
 
 Card-only (faster, no live probes):
 
 ```bash
 npx @a2a-compliance/cli card https://your-agent.example.com
+```
+
+Container images are **linux/amd64 + linux/arm64**, **cosign-signed**,
+and ship **SBOM + SLSA provenance**. Verify:
+
+```bash
+cosign verify ghcr.io/ultraskye/a2a-compliance-cli:latest \
+  --certificate-identity-regexp 'https://github.com/UltraSkye/a2a-compliance/.+' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
+```
+
+Run the reference A2A agent as an ephemeral fixture in your own tests:
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/ultraskye/a2a-reference-agent:latest
+# → http://localhost:8080/.well-known/agent-card.json
 ```
 
 ## CI-friendly outputs
@@ -178,6 +201,12 @@ same report the CLI produces. Run it via docker compose:
 ```bash
 docker compose up -d      # → http://localhost:3000
 docker compose down
+```
+
+Or pull the pre-built image directly:
+
+```bash
+docker run --rm -p 3000:3000 ghcr.io/ultraskye/a2a-compliance-web:latest
 ```
 
 The hosted dashboard refuses to probe private-space URLs (loopback,
