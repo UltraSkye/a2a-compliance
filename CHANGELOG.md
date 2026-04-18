@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning: [Semantic Versioning](https://semver.org/).
 
+## [0.3.2] - 2026-04-18
+
+### Security
+
+Closes every open GitHub code-scanning alert (7 total) surfaced by
+CodeQL + Trivy against the v0.3.1 tree.
+
+- **Reference agent** (`examples/reference-agent/server.js`) no longer
+  echoes the raw `Error.message` from its internal-error catch block
+  back to the client — that path could leak internal file paths,
+  module versions, or upstream endpoint fragments. Logs server-side,
+  returns a generic `"internal error"` instead. Fixes CodeQL
+  `js/stack-trace-exposure`.
+- **Reference agent Dockerfile** drops from `root` to the built-in
+  `node` user before starting the server. Fixes Trivy `DS-0002`
+  *Image user should not be 'root'*.
+- **CLI Dockerfile** declares `HEALTHCHECK NONE` — the CLI is a
+  one-shot probe with no long-lived service state to health-check,
+  so `NONE` is the semantically correct answer. Fixes Trivy
+  `DS-0026` *No HEALTHCHECK defined*.
+- **Helm chart** (`charts/a2a-compliance-web/`):
+  - `runAsUser` / `runAsGroup` / `fsGroup` raised to `10001`
+    (Trivy `KSV-0020` / `KSV-0021` — IDs ≤ 10000 may collide with
+    system accounts; 10001+ is also easier to spot in audit logs).
+  - Every template resource declares `namespace: {{ .Release.Namespace }}`
+    explicitly (Trivy `KSV-0110` — no more silent `default`).
+  - `image.digest` added to `values.yaml`. When set, the Deployment
+    uses the digest form (`repo@sha256:...`) instead of a mutable
+    tag, closing Trivy `KSV-0125` *Restrict container images to
+    trusted registries* for operators who pin.
+
+### Bumped
+
+- `@a2a-compliance/{schemas,core,cli,mcp}` → 0.3.2
+- `charts/a2a-compliance-web` → 0.3.2
+
 ## [0.3.1] - 2026-04-18
 
 ### Fixed

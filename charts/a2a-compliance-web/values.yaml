@@ -8,6 +8,12 @@
 image:
   repository: ghcr.io/ultraskye/a2a-compliance-web
   tag: ""  # defaults to Chart.appVersion
+  # Pin to an immutable digest in production for supply-chain
+  # integrity (closes Trivy KSV-0125 trusted-registries alert). When
+  # set, takes precedence over tag. Copy the digest from the
+  # cosign-signed GHCR publication:
+  #   cosign verify ghcr.io/ultraskye/a2a-compliance-web:<version> --certificate-identity-regexp '...'
+  digest: ""
   pullPolicy: IfNotPresent
 
 # Override for private registries / mirrored tags.
@@ -44,11 +50,16 @@ ingress:
 # Apply to every Pod. The dashboard is stateless and reads no
 # filesystem, so a read-only root FS + non-root user closes the
 # blast radius if a downstream container exploit is found.
+#
+# UID/GID are deliberately above 10000 — under 10000 is treated by
+# Trivy rules KSV-0020 / KSV-0021 as a potential collision with
+# system users (node:alpine's "node" account sits at 1000). Using a
+# high, unique uid also makes this pod easy to spot in an audit log.
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
   seccompProfile:
     type: RuntimeDefault
 

@@ -213,7 +213,11 @@ const server = createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('not found');
   } catch (err) {
-    writeJson(res, 200, jsonRpcError(null, JSONRPC_ERR.InternalError, err?.message ?? String(err)));
+    // Stack traces and raw Error messages can leak internal paths,
+    // module versions, or upstream endpoint details. Log server-side
+    // for the operator; send a generic message to the client.
+    console.error('reference-agent internal error:', err);
+    writeJson(res, 200, jsonRpcError(null, JSONRPC_ERR.InternalError, 'internal error'));
   }
 });
 

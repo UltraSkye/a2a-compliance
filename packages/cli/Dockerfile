@@ -59,6 +59,14 @@ COPY --from=builder --chown=a2a:a2a /out/ ./
 RUN chmod +x ./dist/index.js
 
 USER a2a:a2a
+
+# The CLI is a one-shot probe — it runs, writes a report, exits. There
+# is no long-lived service state to health-check. `HEALTHCHECK NONE`
+# is the correct declaration for this class of image; without it,
+# Dockerfile linters (Trivy / Hadolint / CodeQL DS-0026) warn that a
+# HEALTHCHECK is missing, even though adding one would be meaningless.
+HEALTHCHECK NONE
+
 ENTRYPOINT ["node", "/app/dist/index.js"]
 # Sensible default: print help when run with no args.
 CMD ["--help"]
