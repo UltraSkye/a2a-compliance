@@ -1,0 +1,54 @@
+# a2a-compliance
+
+> Automated compliance test kit and security audit for A2A (Agent2Agent)
+> protocol endpoints. Operator-facing: validates real deployments, fails
+> CI on regression, drops SARIF into GitHub code-scanning. TypeScript /
+> Node 22+. Sibling to `a2aproject/a2a-tck` (Python, aimed at SDK
+> authors).
+
+Install: `npx @a2a-compliance/cli run <url>` — zero local setup.
+
+## Packages
+
+- [@a2a-compliance/cli](https://www.npmjs.com/package/@a2a-compliance/cli): command-line probe; primary entry point
+- [@a2a-compliance/core](https://www.npmjs.com/package/@a2a-compliance/core): assertion engine, reporters, HTTP client with SSRF + DNS-pin
+- [@a2a-compliance/schemas](https://www.npmjs.com/package/@a2a-compliance/schemas): Zod schemas for A2A agent card, task, message, JSON-RPC envelope
+
+## Docs
+
+- [README.md](https://github.com/UltraSkye/a2a-compliance/blob/main/README.md): overview + quick-start + use cases
+- [AGENTS.md](https://github.com/UltraSkye/a2a-compliance/blob/main/AGENTS.md): AI-agent-facing quick reference with code snippets
+- [docs/ARCHITECTURE.md](https://github.com/UltraSkye/a2a-compliance/blob/main/docs/ARCHITECTURE.md): layering, check-id taxonomy, capability-gated severity
+- [docs/A2A_SECURITY_TOP_10.md](https://github.com/UltraSkye/a2a-compliance/blob/main/docs/A2A_SECURITY_TOP_10.md): ten classes of A2A endpoint defect we see in the wild
+- [SECURITY.md](https://github.com/UltraSkye/a2a-compliance/blob/main/SECURITY.md): threat model + reporting
+
+## Checks (high level)
+
+- **card.\***: agent card reachable, valid JSON, schema-conformant, HTTPS, declared `protocolVersion`, skills present
+- **rpc.\***: JSON-RPC 2.0 envelope (-32700 / -32600 / -32601), batch support, method-specific probes
+- **methods.\***: `message/send`, `message/stream`, `tasks/get`, `tasks/cancel`, `tasks/resubscribe`, `tasks/pushNotificationConfig/*` (v0.3 + v1.0 names)
+- **sec.\***: SSRF, TLS enforcement, CORS `*`-with-credentials, redirect-chain re-check
+- **auth.\***: anonymous-challenge, OAuth/OIDC discovery reachability
+- **spec.\***: version-compatibility metadata
+
+Each check carries `category`, `severity` (`must` / `should` / `info`),
+and a `specRef` pointing back into the A2A / JSON-RPC spec. Reports
+end with a `ComplianceTier` (`NON_COMPLIANT` / `MANDATORY` /
+`RECOMMENDED` / `FULL_FEATURED`).
+
+## Outputs
+
+JSON (stdout), JUnit XML, SARIF 2.1.0, Shields SVG badge, snapshot
+diff against a baseline. Every artefact usable offline.
+
+## Reference implementation
+
+[examples/reference-agent/](https://github.com/UltraSkye/a2a-compliance/tree/main/examples/reference-agent)
+ships a minimal zero-dep A2A server implementing the v1.0 method set.
+Use it as a known-compliant fixture or as teaching material.
+
+## Optional
+
+- [apps/web/](https://github.com/UltraSkye/a2a-compliance/tree/main/apps/web): Next.js dashboard with SSRF ingress guard
+- [apps/action/](https://github.com/UltraSkye/a2a-compliance/tree/main/apps/action): GitHub composite action
+- [.github/workflows/spec-drift.yml](https://github.com/UltraSkye/a2a-compliance/blob/main/.github/workflows/spec-drift.yml): weekly cron that hashes upstream A2A artefacts and opens an issue on drift
