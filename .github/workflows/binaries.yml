@@ -1,0 +1,94 @@
+name: Binaries
+
+# Cross-compile the CLI to standalone single-file executables for
+# darwin/linux/windows × amd64/arm64 and attach them to the GitHub
+# release alongside the npm publish + GHCR images. Lets operators run
+# `a2a-compliance` without Node, pnpm, or a container runtime.
+#
+# Bun's `--compile` embeds a minimal Bun runtime + the bundled JS into
+# a single ~100 MB binary. Heavier than a Go binary but still the
+# fastest way to ship a TypeScript CLI without a Node dep.
+#
+# Binary names per GH-release convention:
+#   a2a-compliance-linux-x64
+#   a2a-compliance-linux-arm64
+#   a2a-compliance-darwin-x64
+#   a2a-compliance-darwin-arm64
+#   a2a-compliance-windows-x64.exe
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-linux-x64
+            asset: a2a-compliance-linux-x64
+          - target: bun-linux-arm64
+            asset: a2a-compliance-linux-arm64
+          - target: bun-darwin-x64
+            asset: a2a-compliance-darwin-x64
+          - target: bun-darwin-arm64
+            asset: a2a-compliance-darwin-arm64
+          - target: bun-windows-x64
+            asset: a2a-compliance-windows-x64.exe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: latest }
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --filter=./packages/* build
+
+      - name: Compile single-file binary via bun build --compile
+        # Bun resolves workspace packages by reading each dep's package.json
+        # main field, so the pre-built dist/ trees from the previous step
+        # are what ends up embedded in the binary.
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          bun build \
+            --compile \
+            --target=${{ matrix.target }} \
+            --outfile=out/${{ matrix.asset }} \
+            packages/cli/dist/index.js
+
+      - name: Generate SHA-256
+        run: |
+          cd out
+          sha256sum "${{ matrix.asset }}" > "${{ matrix.asset }}.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+
+      - name: Attach binaries to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          fail_on_unmatched_files: true

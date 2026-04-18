@@ -91,6 +91,23 @@ describe('pushNotificationChecks', () => {
     expect(results.find((r) => r.id === 'rpc.pushNotifications.get')?.status).toBe('pass');
   });
 
+  it('promotes severity to MUST when capability is declared (false-advertising rule)', async () => {
+    const queue = [
+      okJson(cardWithPush),
+      okJson({ jsonrpc: '2.0', id: 10, error: { code: -32603, message: 'internal' } }),
+      okJson({ jsonrpc: '2.0', id: 10, error: { code: -32603, message: 'internal' } }),
+    ];
+    let i = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => queue[i++] ?? okJson({})),
+    );
+    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const set = results.find((r) => r.id === 'rpc.pushNotifications.set');
+    expect(set?.severity).toBe('must');
+    expect(set?.status).toBe('fail');
+  });
+
   it('fails when server returns an unexpected error code', async () => {
     const queue = [
       okJson(cardWithPush),

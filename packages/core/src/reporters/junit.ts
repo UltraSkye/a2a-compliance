@@ -3,6 +3,11 @@ import type { ComplianceReport } from '../report.js';
 /**
  * Render a ComplianceReport as JUnit XML.
  * Compatible with most CI test-result viewers (GitHub Actions, GitLab, Jenkins).
+ *
+ * Each testsuite carries `<properties>` with the compliance tier and
+ * spec version so dashboards that group by property (e.g. GitLab test
+ * reports, Buildkite) can filter across runs without re-parsing the
+ * test-case list.
  */
 export function toJUnitXml(report: ComplianceReport): string {
   const { target, checks, startedAt, summary } = report;
@@ -10,7 +15,7 @@ export function toJUnitXml(report: ComplianceReport): string {
 
   const testcases = checks.map((c) => {
     const nameAttr = xmlAttr(`${c.severity}: ${c.title}`);
-    const classAttr = xmlAttr(c.id);
+    const classAttr = xmlAttr(c.category ? `${c.category}.${c.id}` : c.id);
     const timeAttr = (c.durationMs / 1000).toFixed(3);
     const head = `    <testcase classname="${classAttr}" name="${nameAttr}" time="${timeAttr}">`;
 
@@ -25,10 +30,18 @@ export function toJUnitXml(report: ComplianceReport): string {
     return `${head}\n      <${tag} message="${msg}" type="${c.severity}"/>\n    </testcase>`;
   });
 
+  const suiteProperties = [
+    `      <property name="tier" value="${xmlAttr(summary.tier)}"/>`,
+    `      <property name="specVersion" value="${xmlAttr(report.specVersion)}"/>`,
+  ].join('\n');
+
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<testsuites name="a2a-compliance" time="${durationSec}" tests="${summary.total}" failures="${summary.fail}" errors="0" skipped="${summary.skip}">`,
     `  <testsuite name="${xmlAttr(target)}" timestamp="${startedAt}" tests="${summary.total}" failures="${summary.fail}" skipped="${summary.skip}" time="${durationSec}">`,
+    '    <properties>',
+    suiteProperties,
+    '    </properties>',
     ...testcases,
     '  </testsuite>',
     '</testsuites>',

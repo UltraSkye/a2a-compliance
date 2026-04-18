@@ -1,4 +1,4 @@
-import type { CheckResult } from '@a2a-compliance/core';
+import type { CheckResult, ComplianceTier } from '@a2a-compliance/core';
 import pc from 'picocolors';
 
 export type FailOn = 'any' | 'must' | 'never';
@@ -31,7 +31,7 @@ export function sanitizeForTerminal(s: string): string {
   );
 }
 
-export function printHuman(target: string, checks: CheckResult[]): void {
+export function printHuman(target: string, checks: CheckResult[], tier?: ComplianceTier): void {
   console.log(pc.bold(`\nA2A compliance — ${sanitizeForTerminal(target)}\n`));
   for (const c of checks) {
     const icon = statusIcon(c.status);
@@ -45,9 +45,23 @@ export function printHuman(target: string, checks: CheckResult[]): void {
   const pass = checks.filter((c) => c.status === 'pass').length;
   const fail = checks.filter((c) => c.status === 'fail').length;
   const warn = checks.filter((c) => c.status === 'warn').length;
+  const tail = tier ? `  ${pc.bold('tier:')} ${tierColor(tier)}` : '';
   console.log(
-    `\n  ${pc.green(`${pass} passed`)}, ${pc.yellow(`${warn} warnings`)}, ${pc.red(`${fail} failed`)}\n`,
+    `\n  ${pc.green(`${pass} passed`)}, ${pc.yellow(`${warn} warnings`)}, ${pc.red(`${fail} failed`)}${tail}\n`,
   );
+}
+
+function tierColor(tier: ComplianceTier): string {
+  switch (tier) {
+    case 'FULL_FEATURED':
+      return pc.green(tier);
+    case 'RECOMMENDED':
+      return pc.green(tier);
+    case 'MANDATORY':
+      return pc.yellow(tier);
+    case 'NON_COMPLIANT':
+      return pc.red(tier);
+  }
 }
 
 export function decideExit(checks: CheckResult[], mode: FailOn): number {

@@ -3,8 +3,10 @@ name: CodeQL
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  # CodeQL on every PR regardless of base branch; lets stacked PRs
+  # (feat/v0.3-* targeting feat/v0.2, etc.) surface findings before
+  # they bubble up to main.
+  pull_request: {}
   schedule:
     # Weekly re-scan so newly-published CodeQL rules flag older code too.
     - cron: '17 3 * * 1'

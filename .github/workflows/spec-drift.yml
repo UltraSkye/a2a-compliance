@@ -1,0 +1,125 @@
+name: Spec drift
+
+# Weekly (Mondays 06:00 UTC) and on manual dispatch. Compares the hash
+# of each upstream A2A spec artefact against the committed baseline in
+# packages/schemas/spec-baseline.json and opens an issue on drift so a
+# maintainer can review the diff and update Zod schemas if needed.
+#
+# The workflow itself never modifies the baseline — that's deliberate.
+# We want a human to look at the delta before our probes start
+# enforcing new MUSTs against real agents.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch upstream artefacts and compare hashes
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          baseline="packages/schemas/spec-baseline.json"
+          if [[ ! -f "$baseline" ]]; then
+            echo "::error::baseline file $baseline is missing"
+            exit 2
+          fi
+
+          drift_json=$(node <<'NODE'
+          const fs = require('node:fs');
+          const crypto = require('node:crypto');
+
+          const baseline = JSON.parse(fs.readFileSync('packages/schemas/spec-baseline.json', 'utf8'));
+          const results = [];
+
+          for (const [name, entry] of Object.entries(baseline.artefacts)) {
+            let bodyHash;
+            let status;
+            try {
+              const r = await fetch(entry.url, { redirect: 'follow' });
+              if (!r.ok) {
+                results.push({ name, url: entry.url, status: 'error', detail: `HTTP ${r.status}` });
+                continue;
+              }
+              const buf = Buffer.from(await r.arrayBuffer());
+              bodyHash = crypto.createHash('sha256').update(buf).digest('hex');
+              status = bodyHash === entry.sha256 ? 'unchanged' : 'changed';
+              results.push({ name, url: entry.url, status, was: entry.sha256, now: bodyHash });
+            } catch (err) {
+              results.push({ name, url: entry.url, status: 'error', detail: err?.message ?? String(err) });
+            }
+          }
+
+          fs.writeFileSync('/tmp/spec-drift.json', JSON.stringify({ results }, null, 2));
+          const changed = results.some((r) => r.status === 'changed');
+          const errored = results.some((r) => r.status === 'error');
+          console.log(JSON.stringify({ changed, errored }));
+          NODE
+          )
+
+          echo "drift=$drift_json" >> "$GITHUB_OUTPUT"
+          cat /tmp/spec-drift.json
+
+      - name: Open issue if drift detected
+        if: fromJSON(steps.diff.outputs.drift).changed == true || fromJSON(steps.diff.outputs.drift).errored == true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync('/tmp/spec-drift.json', 'utf8'));
+            const body = [
+              '## Upstream A2A spec drift detected',
+              '',
+              'The weekly spec-drift probe found changes in the upstream A2A',
+              'artefacts we track in `packages/schemas/spec-baseline.json`.',
+              '',
+              'Per-artefact report:',
+              '',
+              '```json',
+              JSON.stringify(report, null, 2),
+              '```',
+              '',
+              '**Next steps**',
+              '- Review upstream changes against `packages/schemas/src/*.ts`.',
+              '- Update the Zod schemas if needed; add / adjust checks in',
+              '  `packages/core/src/assertions/` and their catalog entries.',
+              '- When the schemas match upstream again, update the hashes in',
+              '  `spec-baseline.json` and close this issue.',
+            ].join('\n');
+
+            // De-dupe: if an open "spec drift" issue already exists, comment
+            // on it rather than opening a fresh one every Monday.
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'spec-drift',
+              state: 'open',
+              per_page: 5,
+            });
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'A2A spec drift detected — review required',
+                labels: ['spec-drift'],
+                body,
+              });
+            }

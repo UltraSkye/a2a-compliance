@@ -1,0 +1,17 @@
+{
+  "$schema": "./spec-baseline.schema.json",
+  "_note": "Baseline SHA-256 digests of the upstream A2A artefacts we derive our Zod schemas from. Checked weekly by .github/workflows/spec-drift.yml — on drift an issue opens and a maintainer updates the Zod schemas + this file together. The placeholder hashes below are filled on the first successful run; the workflow flags them as 'changed' so the first manual dispatch establishes the real baseline.",
+  "capturedAt": "2026-04-18",
+  "artefacts": {
+    "a2a-json-schema": {
+      "url": "https://raw.githubusercontent.com/a2aproject/A2A/main/specification/json/a2a.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "description": "Canonical A2A JSON schema (agent card, task, message, error codes)."
+    },
+    "a2a-specification-index": {
+      "url": "https://raw.githubusercontent.com/a2aproject/A2A/main/docs/specification.md",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "description": "Human-readable A2A protocol specification."
+    }
+  }
+}

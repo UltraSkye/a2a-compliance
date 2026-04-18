@@ -1,0 +1,140 @@
+name: Publish images
+
+# Push signed, multi-arch container images to GHCR alongside the npm
+# publish. Triggered by the same `v*.*.*` tag as Release → so npm and
+# GHCR stay in lockstep and a given version tag maps to exactly one
+# immutable image digest.
+#
+# Published images:
+#   ghcr.io/<owner>/a2a-compliance-cli     — the probe CLI
+#   ghcr.io/<owner>/a2a-reference-agent    — zero-dep compliant A2A agent
+#   ghcr.io/<owner>/a2a-compliance-web     — Next.js dashboard
+#
+# Each image ships:
+#   - linux/amd64 + linux/arm64 in one manifest list
+#   - SBOM (SPDX JSON) attached via docker/build-push-action sbom: true
+#   - SLSA provenance attestation (`provenance: mode=max`)
+#   - cosign keyless signature (GitHub OIDC → Sigstore Fulcio +
+#     transparency-logged in Rekor)
+#
+# Nobody else in the A2A ecosystem (a2a-tck, a2a-inspector, a2a-samples)
+# publishes signed+SBOM-attested images today — this is the supply-chain
+# differentiator.
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to publish (without the v prefix). Empty = git sha.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+  # Required for cosign keyless signing (GitHub OIDC token → Fulcio).
+  id-token: write
+  # Required for SLSA provenance attestation that references the action run.
+  attestations: write
+
+jobs:
+  images:
+    name: ${{ matrix.image.name }} / ${{ matrix.image.context-desc }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: a2a-compliance-cli
+            dockerfile: packages/cli/Dockerfile
+            context: .
+            context-desc: repo root
+          - name: a2a-reference-agent
+            dockerfile: examples/reference-agent/Dockerfile
+            context: examples/reference-agent
+            context-desc: reference agent
+          - name: a2a-compliance-web
+            dockerfile: apps/web/Dockerfile
+            context: .
+            context-desc: dashboard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}
+          # `v1.2.3` tag → image tags `1.2.3`, `1.2`, `1`, `latest`.
+          # `workflow_dispatch` falls back to git sha.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image.name }}
+            org.opencontainers.image.description=Part of a2a-compliance — compliance test kit + security audit for A2A (Agent2Agent) protocol endpoints.
+            org.opencontainers.image.vendor=a2a-compliance contributors
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build & push (multi-arch, signed, SBOM-attested)
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
+
+      - name: Sign image with cosign (keyless, Sigstore)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        # `cosign` signs by digest, not tag, so the signature is pinned
+        # to the exact image contents — tag movement doesn't invalidate it.
+        run: |
+          set -euo pipefail
+          if ! command -v cosign >/dev/null 2>&1; then
+            COSIGN_VERSION=v2.4.1
+            curl -sSfLo /tmp/cosign "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64"
+            chmod +x /tmp/cosign
+            sudo mv /tmp/cosign /usr/local/bin/cosign
+          fi
+          for tag in $TAGS; do
+            ref="${tag%%:*}"
+            echo "::group::cosign sign ${ref}@${DIGEST}"
+            cosign sign --yes "${ref}@${DIGEST}"
+            echo "::endgroup::"
+          done
+
+      - name: Attach SLSA build-provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

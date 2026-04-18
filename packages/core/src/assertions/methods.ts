@@ -122,11 +122,22 @@ export async function messageSendCheck(
   }
 }
 
+export interface CapabilityHints {
+  streaming?: boolean;
+}
+
 export async function messageStreamContentTypeCheck(
   endpoint: string,
   methods: SpecMethods,
+  hints: CapabilityHints = {},
 ): Promise<CheckResult> {
   const t0 = now();
+  // False-advertising detection: if the card declared streaming, a
+  // non-conforming stream response is a MUST-level failure rather than
+  // a SHOULD-level warning. If the capability is absent we keep the
+  // lighter SHOULD so opportunistic probing still runs without punishing
+  // agents that never claimed support.
+  const severity: CheckResult['severity'] = hints.streaming === true ? 'must' : 'should';
   const body = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
@@ -149,30 +160,36 @@ export async function messageStreamContentTypeCheck(
       try {
         json = JSON.parse(await readCappedText(res));
       } catch {
-        return fail(
-          'rpc.messageStream.contentType',
-          `${methods.stream} responds with text/event-stream`,
-          `got Content-Type: ${ct || '(none)'} and non-JSON body`,
-          t0,
-        );
-      }
-      const parsed = JsonRpcResponseSchema.safeParse(json);
-      if (parsed.success && isErrorResponse(parsed.data)) {
         return {
           id: 'rpc.messageStream.contentType',
           title: `${methods.stream} responds with text/event-stream`,
-          severity: 'should',
-          status: 'warn',
+          severity,
+          status: 'fail',
+          message: `got Content-Type: ${ct || '(none)'} and non-JSON body`,
+          durationMs: now() - t0,
+        };
+      }
+      const parsed = JsonRpcResponseSchema.safeParse(json);
+      if (parsed.success && isErrorResponse(parsed.data)) {
+        // Declared streaming + no SSE + error is false advertising, not a
+        // warning. Otherwise still warn so opportunistic probing is soft.
+        return {
+          id: 'rpc.messageStream.contentType',
+          title: `${methods.stream} responds with text/event-stream`,
+          severity,
+          status: hints.streaming === true ? 'fail' : 'warn',
           message: `server returned JSON-RPC error ${parsed.data.error.code} instead of SSE — streaming may not be supported`,
           durationMs: now() - t0,
         };
       }
-      return fail(
-        'rpc.messageStream.contentType',
-        `${methods.stream} responds with text/event-stream`,
-        `got Content-Type: ${ct || '(none)'}`,
-        t0,
-      );
+      return {
+        id: 'rpc.messageStream.contentType',
+        title: `${methods.stream} responds with text/event-stream`,
+        severity,
+        status: 'fail',
+        message: `got Content-Type: ${ct || '(none)'}`,
+        durationMs: now() - t0,
+      };
     }
 
     try {
@@ -184,24 +201,30 @@ export async function messageStreamContentTypeCheck(
     return {
       id: 'rpc.messageStream.contentType',
       title: `${methods.stream} responds with text/event-stream`,
-      severity: 'should',
+      severity,
       status: 'pass',
       durationMs: now() - t0,
     };
   } catch (err) {
-    return fail(
-      'rpc.messageStream.contentType',
-      `${methods.stream} responds with text/event-stream`,
-      redactInText(err instanceof Error ? err.message : String(err)),
-      t0,
-    );
+    return {
+      id: 'rpc.messageStream.contentType',
+      title: `${methods.stream} responds with text/event-stream`,
+      severity,
+      status: 'fail',
+      message: redactInText(err instanceof Error ? err.message : String(err)),
+      durationMs: now() - t0,
+    };
   }
 }
 
-export async function methodChecks(endpoint: string, methods: SpecMethods): Promise<CheckResult[]> {
+export async function methodChecks(
+  endpoint: string,
+  methods: SpecMethods,
+  hints: CapabilityHints = {},
+): Promise<CheckResult[]> {
   return [
     await messageSendCheck(endpoint, methods),
-    await messageStreamContentTypeCheck(endpoint, methods),
+    await messageStreamContentTypeCheck(endpoint, methods, hints),
   ];
 }
 

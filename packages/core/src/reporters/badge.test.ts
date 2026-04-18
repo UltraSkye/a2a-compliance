@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ComplianceReport } from '../report.js';
+import { summarize } from '../report.js';
 import { toBadgeSvg } from './badge.js';
 
 function makeReport(
@@ -19,13 +20,7 @@ function makeReport(
     startedAt: '2026-04-17T00:00:00.000Z',
     finishedAt: '2026-04-17T00:00:00.000Z',
     checks,
-    summary: {
-      total: checks.length,
-      pass: checks.filter((c) => c.status === 'pass').length,
-      fail: checks.filter((c) => c.status === 'fail').length,
-      warn: checks.filter((c) => c.status === 'warn').length,
-      skip: checks.filter((c) => c.status === 'skip').length,
-    },
+    summary: summarize(checks),
   };
 }
 
@@ -63,5 +58,37 @@ describe('toBadgeSvg', () => {
     expect(svg).toContain('a &amp; b');
     expect(svg).toMatch(/^<svg /);
     expect(svg).toContain('</svg>');
+  });
+
+  describe('tier mode', () => {
+    it('renders FULL_FEATURED with green', () => {
+      const svg = toBadgeSvg(makeReport([{ status: 'pass' }]), { tier: true });
+      expect(svg).toContain('full-featured');
+      expect(svg).toContain('#4c1');
+    });
+
+    it('renders RECOMMENDED with light-green when something was skipped', () => {
+      const svg = toBadgeSvg(
+        makeReport([{ status: 'pass' }, { status: 'skip', severity: 'should' }]),
+        { tier: true },
+      );
+      expect(svg).toContain('recommended');
+      expect(svg).toContain('#97ca00');
+    });
+
+    it('renders MANDATORY with yellow when a should failed', () => {
+      const svg = toBadgeSvg(
+        makeReport([{ status: 'pass' }, { status: 'fail', severity: 'should' }]),
+        { tier: true },
+      );
+      expect(svg).toContain('mandatory');
+      expect(svg).toContain('#dfb317');
+    });
+
+    it('renders NON_COMPLIANT with red when a must failed', () => {
+      const svg = toBadgeSvg(makeReport([{ status: 'fail', severity: 'must' }]), { tier: true });
+      expect(svg).toContain('non-compliant');
+      expect(svg).toContain('#e05d44');
+    });
   });
 });

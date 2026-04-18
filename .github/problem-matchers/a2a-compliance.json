@@ -1,0 +1,18 @@
+{
+  "problemMatcher": [
+    {
+      "owner": "a2a-compliance",
+      "pattern": [
+        {
+          "regexp": "^::a2a::(error|warning|notice)::(\\S+)::([^:]+):(\\d+):(\\d+)::(.+)$",
+          "severity": 1,
+          "code": 2,
+          "file": 3,
+          "line": 4,
+          "column": 5,
+          "message": 6
+        }
+      ]
+    }
+  ]
+}

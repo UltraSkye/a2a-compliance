@@ -70,6 +70,12 @@ grep -q '✗ \[MUST\] Agent card conforms to A2A schema' /tmp/a2a-broken.txt \
   || bad "broken mock should fail schema"
 ok "broken mock reports schema errors"
 
+say "CLI against reference-agent (expect FULL_FEATURED ignoring local HTTPS/SSRF)"
+$CLI run http://localhost:8004 --skip-security --fail-on never > /tmp/a2a-ref.txt
+grep -q 'tier: FULL_FEATURED' /tmp/a2a-ref.txt \
+  || bad "reference agent should land in FULL_FEATURED tier"
+ok "reference agent is compliant (FULL_FEATURED)"
+
 say "snapshot round-trip"
 $CLI run http://localhost:8001 --skip-protocol --fail-on never \
   --snapshot-out /tmp/a2a-baseline.json > /dev/null

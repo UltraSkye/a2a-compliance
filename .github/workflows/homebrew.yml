@@ -1,0 +1,146 @@
+name: Homebrew
+
+# On every v*.*.* tag, update the Homebrew formula in the tap repo
+# UltraSkye/homebrew-a2a-compliance so `brew install
+# ultraskye/a2a-compliance/cli` pulls the freshly-tagged binary.
+#
+# Runs *after* `binaries.yml` has produced darwin/linux binaries and
+# attached them to the release — the formula points at those assets
+# directly and uses their sha256 digests for integrity.
+#
+# Bootstrap: create an empty repo at UltraSkye/homebrew-a2a-compliance
+# with a `Formula/` directory before the first tag, and add a
+# `HOMEBREW_TAP_TOKEN` secret (classic PAT with `contents: write` on
+# that repo, or a fine-grained token scoped to it). The workflow is a
+# no-op until that repo exists.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to ship (without the v prefix). Defaults to the latest release.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bump-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${GITHUB_REF_NAME#v}"
+            echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for release assets to appear
+        # Retry — the binaries job runs in parallel with `release.published`,
+        # so the tarballs may not be uploaded yet when we land here.
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
+          assets=(a2a-compliance-darwin-x64 a2a-compliance-darwin-arm64 a2a-compliance-linux-x64 a2a-compliance-linux-arm64)
+          for a in "${assets[@]}"; do
+            for i in $(seq 1 30); do
+              if curl -sfLI "${BASE}/${a}" > /dev/null; then
+                echo "$a ready"
+                break
+              fi
+              echo "waiting for $a (attempt $i)…"
+              sleep 10
+            done
+          done
+
+      - name: Fetch SHA-256 digests
+        id: sha
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
+          fetch_sha() {
+            curl -sfL "${BASE}/$1.sha256" | awk '{print $1}'
+          }
+          {
+            echo "darwin_x64=$(fetch_sha a2a-compliance-darwin-x64)"
+            echo "darwin_arm64=$(fetch_sha a2a-compliance-darwin-arm64)"
+            echo "linux_x64=$(fetch_sha a2a-compliance-linux-x64)"
+            echo "linux_arm64=$(fetch_sha a2a-compliance-linux-arm64)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Render formula
+        run: |
+          cat > /tmp/a2a-compliance.rb <<'EOF'
+          class A2aCompliance < Formula
+            desc "Compliance test kit and security audit for A2A (Agent2Agent) protocol endpoints"
+            homepage "https://github.com/UltraSkye/a2a-compliance"
+            version "__VERSION__"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/UltraSkye/a2a-compliance/releases/download/v#{version}/a2a-compliance-darwin-arm64"
+                sha256 "__DARWIN_ARM64__"
+              end
+              on_intel do
+                url "https://github.com/UltraSkye/a2a-compliance/releases/download/v#{version}/a2a-compliance-darwin-x64"
+                sha256 "__DARWIN_X64__"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/UltraSkye/a2a-compliance/releases/download/v#{version}/a2a-compliance-linux-arm64"
+                sha256 "__LINUX_ARM64__"
+              end
+              on_intel do
+                url "https://github.com/UltraSkye/a2a-compliance/releases/download/v#{version}/a2a-compliance-linux-x64"
+                sha256 "__LINUX_X64__"
+              end
+            end
+
+            def install
+              bin_target = "a2a-compliance"
+              mv Dir["*"].first, bin_target
+              bin.install bin_target
+            end
+
+            test do
+              assert_match "a2a-compliance", shell_output("#{bin}/a2a-compliance --help")
+            end
+          end
+          EOF
+          sed -i \
+            -e "s/__VERSION__/${{ steps.ver.outputs.version }}/g" \
+            -e "s/__DARWIN_X64__/${{ steps.sha.outputs.darwin_x64 }}/g" \
+            -e "s/__DARWIN_ARM64__/${{ steps.sha.outputs.darwin_arm64 }}/g" \
+            -e "s/__LINUX_X64__/${{ steps.sha.outputs.linux_x64 }}/g" \
+            -e "s/__LINUX_ARM64__/${{ steps.sha.outputs.linux_arm64 }}/g" \
+            /tmp/a2a-compliance.rb
+
+      - name: Commit formula to tap repo
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN secret is not set — skipping tap update. Create UltraSkye/homebrew-a2a-compliance and add the secret to enable this step."
+            exit 0
+          fi
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/UltraSkye/homebrew-a2a-compliance.git" tap
+          mkdir -p tap/Formula
+          cp /tmp/a2a-compliance.rb tap/Formula/a2a-compliance.rb
+          cd tap
+          git config user.name  'a2a-compliance-bot'
+          git config user.email 'a2a-compliance-bot@users.noreply.github.com'
+          git add Formula/a2a-compliance.rb
+          git commit -m "a2a-compliance ${{ steps.ver.outputs.version }}" || { echo "no changes"; exit 0; }
+          git push origin HEAD

@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { pinnedDispatcherFor } from './dns-pin.js';
 import { ssrfCheckForUrl } from './private-network.js';
+
+// Undici's Agent type isn't structurally compatible with Node's bundled
+// undici-types' Dispatcher at TS level — we only need to stash + close
+// + pass it as `dispatcher` to fetch, so we carry it as an opaque handle.
+type DispatcherLike = { close(): Promise<void> };
 
 export const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -37,6 +43,14 @@ export interface FetchOptions {
   timeoutMs?: number;
   /** Max redirect hops to follow. Default: 10. */
   maxRedirects?: number;
+  /**
+   * When true, resolve each hostname once up front and force undici to
+   * use the checked IP for every connect. Closes the DNS-rebinding
+   * TOCTOU documented in SECURITY.md. Default: false so callers that
+   * don't care about rebinding (unit tests with mocked fetch, internal
+   * self-probing) don't pay the extra DNS lookup.
+   */
+  pinDns?: boolean;
 }
 
 /**
@@ -56,47 +70,73 @@ export interface FetchOptions {
 export async function fetchWithTimeout(url: string, opts: FetchOptions = {}): Promise<Response> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRedirects = opts.maxRedirects ?? DEFAULT_MAX_REDIRECTS;
+  const pinDns = opts.pinDns === true;
 
   let currentUrl = url;
-  for (let hop = 0; hop <= maxRedirects; hop++) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    let res: Response;
-    try {
-      const headers = new Headers(opts.headers);
-      if (!headers.has('user-agent')) headers.set('user-agent', USER_AGENT);
-      const init: RequestInit = {
-        method: opts.method ?? 'GET',
-        signal: ctrl.signal,
-        redirect: 'manual',
-        headers,
-      };
-      if (opts.body !== undefined) init.body = opts.body;
-      res = await fetch(currentUrl, init);
-    } finally {
-      clearTimeout(t);
-    }
+  let dispatcher: DispatcherLike | undefined;
+  let dispatcherHost: string | undefined;
 
-    // 3xx with a Location header — resolve it and re-check SSRF before
-    // following. Anything else (including 3xx without Location) we hand
-    // back to the caller as-is.
-    if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
-      const location = res.headers.get('location') ?? '';
-      const target = new URL(location, currentUrl).toString();
-      const safety = await ssrfCheckForUrl(target);
-      if (!safety.ok) {
-        throw new Error(
-          `refused to follow redirect to ${target}: ${safety.reason ?? 'private-space target'}`,
-        );
+  try {
+    for (let hop = 0; hop <= maxRedirects; hop++) {
+      if (pinDns) {
+        // Re-pin on the first hop and whenever the host changes (redirect
+        // between hosts). Keeps the agent's lookup override in sync with
+        // the URL it's actually answering for.
+        const host = new URL(currentUrl).hostname;
+        if (dispatcherHost !== host) {
+          await dispatcher?.close().catch(() => {});
+          const pinned = await pinnedDispatcherFor(host);
+          dispatcher = pinned.dispatcher as unknown as DispatcherLike;
+          dispatcherHost = host;
+        }
       }
-      currentUrl = target;
-      continue;
+
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      let res: Response;
+      try {
+        const headers = new Headers(opts.headers);
+        if (!headers.has('user-agent')) headers.set('user-agent', USER_AGENT);
+        const init: Record<string, unknown> = {
+          method: opts.method ?? 'GET',
+          signal: ctrl.signal,
+          redirect: 'manual',
+          headers,
+        };
+        if (opts.body !== undefined) init.body = opts.body;
+        // `dispatcher` is accepted by Node's undici-backed fetch at
+        // runtime but the TS shape of its bundled undici-types diverges
+        // from the installed undici 8's Dispatcher — carry it through
+        // via an `unknown`-keyed record so we don't fight the types.
+        if (dispatcher) init.dispatcher = dispatcher;
+        res = await fetch(currentUrl, init as RequestInit);
+      } finally {
+        clearTimeout(t);
+      }
+
+      // 3xx with a Location header — resolve it and re-check SSRF before
+      // following. Anything else (including 3xx without Location) we hand
+      // back to the caller as-is.
+      if (res.status >= 300 && res.status < 400 && res.headers.has('location')) {
+        const location = res.headers.get('location') ?? '';
+        const target = new URL(location, currentUrl).toString();
+        const safety = await ssrfCheckForUrl(target);
+        if (!safety.ok) {
+          throw new Error(
+            `refused to follow redirect to ${target}: ${safety.reason ?? 'private-space target'}`,
+          );
+        }
+        currentUrl = target;
+        continue;
+      }
+
+      return res;
     }
 
-    return res;
+    throw new Error(`too many redirects (>${maxRedirects}) starting at ${url}`);
+  } finally {
+    await dispatcher?.close().catch(() => {});
   }
-
-  throw new Error(`too many redirects (>${maxRedirects}) starting at ${url}`);
 }
 
 export class ResponseTooLargeError extends Error {

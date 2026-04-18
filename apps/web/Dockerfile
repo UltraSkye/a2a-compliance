@@ -41,4 +41,12 @@ COPY --from=builder /repo/apps/web/.next/static ./apps/web/.next/static
 
 USER node
 EXPOSE 3000
+
+# Next.js standalone servers answer on / with 200 once the bundle is
+# warm, so the root path works as a liveness probe — no extra /healthz
+# endpoint to maintain. node:24-slim lacks wget / curl; use Node's own
+# fetch to keep the image minimal.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["node", "apps/web/server.js"]

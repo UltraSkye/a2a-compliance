@@ -3,8 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  # Run on every PR regardless of its base branch so stacked PRs
+  # (feat/v0.3-docker → feat/v0.2 → main, etc.) still get full CI
+  # before they land. The default-branch-only form blocks feedback
+  # on anything not retargeted to main.
+  pull_request: {}
 
 jobs:
   packages:
@@ -67,3 +70,53 @@ jobs:
       - run: pnpm -r --filter=./packages/* build
       - run: pnpm --filter @a2a-compliance/web typecheck
       - run: pnpm --filter @a2a-compliance/web build
+
+  # Filesystem + config vulnerability scan with Trivy. Runs on every
+  # push / PR so a new CVE in a transitive dep or a misconfigured
+  # Dockerfile is caught before release. Findings upload as SARIF to
+  # GitHub code-scanning when running on push; on forked PRs the
+  # upload step is skipped (no write-perm on the fork's repo).
+  trivy:
+    name: trivy (fs + config)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy — filesystem scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+          format: sarif
+          output: trivy-fs.sarif
+          # Fail CI on CRITICAL/HIGH vulns that have a fix available.
+          exit-code: '1'
+
+      - name: Trivy — Dockerfile / compose config scan
+        if: always()
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload SARIF to code-scanning
+        if: always() && github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+      - name: Upload config SARIF to code-scanning
+        if: always() && github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config

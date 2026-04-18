@@ -1,0 +1,87 @@
+# Default values for a2a-compliance-web.
+# The chart is intentionally thin — one Deployment, one Service, an
+# optional Ingress. Pull in the ghcr.io/ultraskye/a2a-compliance-web
+# image (signed, multi-arch, SBOM-attested) and wire it into your
+# cluster. No persistence, no secret volumes — the dashboard is
+# stateless.
+
+image:
+  repository: ghcr.io/ultraskye/a2a-compliance-web
+  tag: ""  # defaults to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+# Override for private registries / mirrored tags.
+imagePullSecrets: []
+
+replicas: 1
+
+# SSRF-hostile agents hammering the probe can rack up egress cost; a
+# tiny default so operators who forget to set limits don't surprise
+# themselves. Bump when running at serious scale.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: a2a.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Apply to every Pod. The dashboard is stateless and reads no
+# filesystem, so a read-only root FS + non-root user closes the
+# blast radius if a downstream container exploit is found.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# /tmp needs to be writable for Next.js's cache-control machinery.
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
+
+# Liveness + readiness probes hit the standalone Next.js server's
+# root path — same as the Dockerfile HEALTHCHECK. No sidecar endpoint.
+livenessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 15
+  periodSeconds: 20
+readinessProbe:
+  httpGet:
+    path: /
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

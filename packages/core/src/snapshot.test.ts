@@ -1,21 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type { ComplianceReport } from './report.js';
+import { summarize } from './report.js';
 import { diffSnapshot, hasRegressions, parseSnapshot, toSnapshot } from './snapshot.js';
 
 function makeReport(checks: Array<[string, 'pass' | 'fail' | 'warn' | 'skip']>): ComplianceReport {
+  const fullChecks = checks.map(([id, status]) => ({
+    id,
+    title: id,
+    severity: 'must' as const,
+    status,
+    durationMs: 0,
+  }));
   return {
     target: 'https://x',
     specVersion: '1.0',
     startedAt: '2026-04-17T00:00:00.000Z',
     finishedAt: '2026-04-17T00:00:01.000Z',
-    checks: checks.map(([id, status]) => ({
-      id,
-      title: id,
-      severity: 'must',
-      status,
-      durationMs: 0,
-    })),
-    summary: { total: checks.length, pass: 0, fail: 0, warn: 0, skip: 0 },
+    checks: fullChecks,
+    summary: summarize(fullChecks),
   };
 }
 
