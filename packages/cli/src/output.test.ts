@@ -77,16 +77,24 @@ describe('printHuman', () => {
     expect(out).toMatch(/agent down/);
   });
 
-  it('sanitises ANSI / control chars in target and title before printing', () => {
+  it('sanitises ANSI / control chars from target and title before printing', () => {
     const lines = captureLog();
-    printHuman('https://evil\u001b[2J.com', [
+    printHuman('https://evil\u001b[2Jhidden.com', [
       { ...chk('pass'), title: '\u001b[31mhacked\u001b[0m' },
     ]);
     const out = lines().join('\n');
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: testing ANSI strip.
-    expect(out).not.toMatch(/\u001b\[2J/);
-    // biome-ignore lint/suspicious/noControlCharactersInRegex: testing ANSI strip.
-    expect(out).not.toMatch(/\u001b\[31m/);
+    // The attacker's cursor-move sequence must not appear verbatim.
+    expect(out).not.toContain('\u001b[2J');
+    // 'hidden.com' was glued to 'evil' by the escape — stripped output
+    // collapses them. Either way, no raw 2J in the string.
+    expect(out).toContain('evil');
+    expect(out).toContain('hidden.com');
+    // The title text is rendered without the attacker's red/reset wrap.
+    // (our own pc.red / pc.green wrappers around the summary counts are
+    //  still present — picocolors emits them when CI attaches a TTY.)
+    expect(out).toContain('hacked');
+    expect(out).not.toContain('\u001b[31mhacked');
+    expect(out).not.toContain('hacked\u001b[0m');
   });
 });
 
