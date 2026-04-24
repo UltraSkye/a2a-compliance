@@ -58,7 +58,9 @@ jobs:
       - run: pnpm -r --filter=./packages/* exec npx vitest run --coverage
 
   web:
-    name: web build
+    # Name kept verbatim — it's a required status check in the branch
+    # protection rule on main; renaming it would make the rule unreachable.
+    name: web (typecheck + build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
