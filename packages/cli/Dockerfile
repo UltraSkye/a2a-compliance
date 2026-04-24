@@ -11,7 +11,7 @@
 # `file: packages/cli/Dockerfile`.
 
 # ---- Stage 1: base with pnpm ----
-FROM node:24-alpine AS base
+FROM node:25-alpine AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /repo
@@ -47,7 +47,7 @@ RUN pnpm --filter '@a2a-compliance/cli...' build
 RUN pnpm --filter @a2a-compliance/cli deploy --prod --legacy /out
 
 # ---- Stage 4: minimal runtime image ----
-FROM node:24-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
