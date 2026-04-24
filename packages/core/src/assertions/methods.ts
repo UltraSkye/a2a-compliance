@@ -6,7 +6,7 @@ import {
   makeProbeMessage,
   TaskSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now, readCappedText } from '../http.js';
+import { fetchWithTimeout, now, type ProbeOptions, readCappedText } from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
@@ -35,6 +35,7 @@ function sendParams(methodName: string): Record<string, unknown> {
 export async function messageSendCheck(
   endpoint: string,
   methods: SpecMethods,
+  po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
   const body = JSON.stringify({
@@ -49,6 +50,7 @@ export async function messageSendCheck(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
 
     const text = await readCappedText(res);
@@ -130,6 +132,7 @@ export async function messageStreamContentTypeCheck(
   endpoint: string,
   methods: SpecMethods,
   hints: CapabilityHints = {},
+  po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
   // False-advertising detection: if the card declared streaming, a
@@ -150,6 +153,7 @@ export async function messageStreamContentTypeCheck(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body,
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
 
     const ct = res.headers.get('content-type') ?? '';
@@ -221,10 +225,11 @@ export async function methodChecks(
   endpoint: string,
   methods: SpecMethods,
   hints: CapabilityHints = {},
+  po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
   return [
-    await messageSendCheck(endpoint, methods),
-    await messageStreamContentTypeCheck(endpoint, methods, hints),
+    await messageSendCheck(endpoint, methods, po),
+    await messageStreamContentTypeCheck(endpoint, methods, hints, po),
   ];
 }
 

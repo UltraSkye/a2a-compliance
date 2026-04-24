@@ -1,5 +1,6 @@
-import { redactInText, runFullChecks, ssrfCheckForUrl } from '@a2a-compliance/core';
+import { runFullChecks, ssrfCheckForUrl } from '@a2a-compliance/core';
 import { type NextRequest, NextResponse } from 'next/server';
+import { checkRate, clientKey } from './rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,13 @@ const MAX_URL_LENGTH = 2048;
 const MAX_REQUEST_BYTES = 8 * 1024;
 
 export async function POST(req: NextRequest): Promise<Response> {
+  const rl = checkRate(clientKey(req));
+  if (!rl.allowed) {
+    const res = noCacheJson({ error: 'rate limit exceeded — retry later' }, { status: 429 });
+    res.headers.set('Retry-After', String(rl.retryAfterSec));
+    return res;
+  }
+
   // Early reject on oversized declared body. req.json() consumes the full
   // stream — we don't want that for adversarial inputs.
   const declared = Number(req.headers.get('content-length'));
@@ -69,12 +77,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   try {
-    const report = await runFullChecks(body.url);
+    // pinDns closes the DNS-rebinding TOCTOU between the ssrfCheckForUrl
+    // above and the actual probe fetches.
+    const report = await runFullChecks(body.url, { pinDns: true });
     return noCacheJson(report);
   } catch (err) {
-    // Redact URLs from error messages before surfacing them to the caller;
-    // internal fetch failures sometimes embed the fetched URL verbatim.
-    const message = redactInText(err instanceof Error ? err.message : String(err));
-    return noCacheJson({ error: message }, { status: 500 });
+    // Error messages from the probe chain can embed hostnames or IPs that
+    // were discovered behind the initial SSRF guard (e.g. a public URL that
+    // redirected to 10.0.0.5). Surfacing them turns /api/check into an
+    // internal-network enumeration oracle. Log server-side, reply generic.
+    console.error('[/api/check] probe failed:', err);
+    return noCacheJson({ error: 'probe failed — see server logs' }, { status: 500 });
   }
 }

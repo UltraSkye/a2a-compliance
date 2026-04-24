@@ -1,5 +1,5 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now, readCappedJson } from '../http.js';
+import { fetchWithTimeout, now, type ProbeOptions, readCappedJson } from '../http.js';
 import { ssrfCheckForUrl } from '../private-network.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
@@ -23,7 +23,10 @@ function collectCardUrls(card: unknown): string[] {
   return urls;
 }
 
-export async function cardSsrfChecks(baseUrl: string): Promise<CheckResult[]> {
+export async function cardSsrfChecks(
+  baseUrl: string,
+  probe: ProbeOptions = {},
+): Promise<CheckResult[]> {
   const t0 = now();
   const cardUrl = new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString();
 
@@ -31,7 +34,10 @@ export async function cardSsrfChecks(baseUrl: string): Promise<CheckResult[]> {
   let res: Response;
   let card: unknown;
   try {
-    res = await fetchWithTimeout(cardUrl);
+    res = await fetchWithTimeout(
+      cardUrl,
+      probe.pinDns === undefined ? {} : { pinDns: probe.pinDns },
+    );
     if (!res.ok) {
       return [
         {

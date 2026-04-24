@@ -6,7 +6,13 @@ import {
   JsonRpcErrorCode,
   JsonRpcResponseSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now, readCappedJson, readCappedText } from '../http.js';
+import {
+  fetchWithTimeout,
+  now,
+  type ProbeOptions,
+  readCappedJson,
+  readCappedText,
+} from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
@@ -17,9 +23,12 @@ const ACCEPTABLE_ERROR_CODES: number[] = [
   A2AErrorCode.PushNotificationNotSupportedError,
 ];
 
-async function capabilityDeclared(baseUrl: string): Promise<boolean> {
+async function capabilityDeclared(baseUrl: string, po: ProbeOptions = {}): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString());
+    const res = await fetchWithTimeout(
+      new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString(),
+      po.pinDns === undefined ? {} : { pinDns: po.pinDns },
+    );
     if (!res.ok) return false;
     const parsed = AgentCardSchema.safeParse(await readCappedJson(res));
     return parsed.success && parsed.data.capabilities.pushNotifications === true;
@@ -34,6 +43,7 @@ async function probePush(
   title: string,
   method: string,
   severity: CheckResult['severity'],
+  po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
   try {
@@ -49,6 +59,7 @@ async function probePush(
           pushNotificationConfig: { url: 'https://example.invalid/webhook' },
         },
       }),
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
     const text = await readCappedText(res);
     let json: unknown;
@@ -108,8 +119,9 @@ export async function pushNotificationChecks(
   baseUrl: string,
   endpoint: string,
   methods: SpecMethods,
+  po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
-  if (!(await capabilityDeclared(baseUrl))) {
+  if (!(await capabilityDeclared(baseUrl, po))) {
     return [
       {
         id: 'rpc.pushNotifications.capability',
@@ -132,6 +144,7 @@ export async function pushNotificationChecks(
       `${methods.pushSet} responds with a well-formed error`,
       methods.pushSet,
       severity,
+      po,
     ),
     await probePush(
       endpoint,
@@ -139,6 +152,7 @@ export async function pushNotificationChecks(
       `${methods.pushGet} responds with a well-formed error`,
       methods.pushGet,
       severity,
+      po,
     ),
   ];
 }

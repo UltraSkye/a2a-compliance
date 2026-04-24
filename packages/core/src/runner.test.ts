@@ -155,6 +155,44 @@ describe('runFullChecks', () => {
     expect(report.checks.find((c) => c.id === 'card.protocolVersion')).toBeUndefined();
   });
 
+  it('pinDns option reaches fetchWithTimeout — dispatcher attached to every probe fetch', async () => {
+    // Literal IP skips DNS lookup inside pinnedDispatcherFor, so no node:dns mock needed.
+    const dispatcherSeen: boolean[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit & { dispatcher?: unknown }) => {
+        dispatcherSeen.push(init?.dispatcher !== undefined);
+        if (url.includes('/.well-known/agent-card.json')) {
+          return okJson({ ...validCard, url: 'https://1.1.1.1/a2a' });
+        }
+        return okJson({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'x' } });
+      }),
+    );
+    await runFullChecks('https://1.1.1.1', {
+      skipSecurity: true,
+      skipAuth: true,
+      pinDns: true,
+    });
+    expect(dispatcherSeen.some((v) => v === true)).toBe(true);
+  });
+
+  it('no dispatcher is attached when pinDns is off', async () => {
+    const dispatcherSeen: boolean[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit & { dispatcher?: unknown }) => {
+        dispatcherSeen.push(init?.dispatcher !== undefined);
+        if (url.includes('/.well-known/agent-card.json')) return okJson(validCard);
+        return okJson({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'x' } });
+      }),
+    );
+    await runFullChecks('https://agent.example.com', {
+      skipSecurity: true,
+      skipAuth: true,
+    });
+    expect(dispatcherSeen.every((v) => v === false)).toBe(true);
+  });
+
   it('selects v0.3 method names when the card declares protocolVersion: "0.3"', async () => {
     const v03 = { ...validCard, protocolVersion: '0.3' };
     const calls: string[] = [];

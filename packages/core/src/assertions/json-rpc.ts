@@ -4,7 +4,7 @@ import {
   JsonRpcErrorCode,
   JsonRpcResponseSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now, readCappedText } from '../http.js';
+import { fetchWithTimeout, now, type ProbeOptions, readCappedText } from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
@@ -22,6 +22,7 @@ async function probe(
   id: string,
   severity: CheckResult['severity'],
   p: RpcProbe,
+  po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
   try {
@@ -29,6 +30,7 @@ async function probe(
       method: 'POST',
       headers: { 'Content-Type': p.contentType ?? 'application/json' },
       body: p.body,
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
 
     const text = await readCappedText(res);
@@ -98,91 +100,128 @@ async function probe(
 export async function jsonRpcChecks(
   endpoint: string,
   methods: SpecMethods,
+  po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
   results.push(
-    await probe(endpoint, 'rpc.parseError', 'must', {
-      title: 'Rejects invalid JSON with -32700 Parse error',
-      body: '{ this is not json',
-      expectedErrorCode: JsonRpcErrorCode.ParseError,
-    }),
+    await probe(
+      endpoint,
+      'rpc.parseError',
+      'must',
+      {
+        title: 'Rejects invalid JSON with -32700 Parse error',
+        body: '{ this is not json',
+        expectedErrorCode: JsonRpcErrorCode.ParseError,
+      },
+      po,
+    ),
   );
 
   results.push(
-    await probe(endpoint, 'rpc.invalidRequest', 'must', {
-      title: 'Rejects malformed JSON-RPC envelope with -32600 Invalid Request',
-      body: JSON.stringify({ id: 1, method: 'any.method' }),
-      expectedErrorCode: JsonRpcErrorCode.InvalidRequest,
-    }),
+    await probe(
+      endpoint,
+      'rpc.invalidRequest',
+      'must',
+      {
+        title: 'Rejects malformed JSON-RPC envelope with -32600 Invalid Request',
+        body: JSON.stringify({ id: 1, method: 'any.method' }),
+        expectedErrorCode: JsonRpcErrorCode.InvalidRequest,
+      },
+      po,
+    ),
   );
 
   results.push(
-    await probe(endpoint, 'rpc.methodNotFound', 'must', {
-      title: 'Returns -32601 for unknown method',
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'compliance.probe.nonexistent',
-      }),
-      expectedErrorCode: JsonRpcErrorCode.MethodNotFound,
-    }),
+    await probe(
+      endpoint,
+      'rpc.methodNotFound',
+      'must',
+      {
+        title: 'Returns -32601 for unknown method',
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'compliance.probe.nonexistent',
+        }),
+        expectedErrorCode: JsonRpcErrorCode.MethodNotFound,
+      },
+      po,
+    ),
   );
 
   // Accept InvalidParams alongside TaskNotFoundError — some servers validate
   // the id format before even looking it up.
   results.push(
-    await probe(endpoint, 'rpc.tasksGet.notFound', 'should', {
-      title: `${methods.get} returns TaskNotFoundError (-32001) for unknown task id`,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 2,
-        method: methods.get,
-        params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
-      }),
-      acceptableErrorCodes: [A2AErrorCode.TaskNotFoundError, JsonRpcErrorCode.InvalidParams],
-    }),
+    await probe(
+      endpoint,
+      'rpc.tasksGet.notFound',
+      'should',
+      {
+        title: `${methods.get} returns TaskNotFoundError (-32001) for unknown task id`,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 2,
+          method: methods.get,
+          params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
+        }),
+        acceptableErrorCodes: [A2AErrorCode.TaskNotFoundError, JsonRpcErrorCode.InvalidParams],
+      },
+      po,
+    ),
   );
 
   // Also accept UnsupportedOperation — resubscribe is genuinely optional per
   // spec, and some implementations don't wire it up at all.
   results.push(
-    await probe(endpoint, 'rpc.tasksResubscribe.notFound', 'should', {
-      title: `${methods.resubscribe} returns TaskNotFoundError (-32001) for unknown task id`,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 3,
-        method: methods.resubscribe,
-        params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
-      }),
-      acceptableErrorCodes: [
-        A2AErrorCode.TaskNotFoundError,
-        JsonRpcErrorCode.InvalidParams,
-        A2AErrorCode.UnsupportedOperationError,
-      ],
-    }),
+    await probe(
+      endpoint,
+      'rpc.tasksResubscribe.notFound',
+      'should',
+      {
+        title: `${methods.resubscribe} returns TaskNotFoundError (-32001) for unknown task id`,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 3,
+          method: methods.resubscribe,
+          params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
+        }),
+        acceptableErrorCodes: [
+          A2AErrorCode.TaskNotFoundError,
+          JsonRpcErrorCode.InvalidParams,
+          A2AErrorCode.UnsupportedOperationError,
+        ],
+      },
+      po,
+    ),
   );
 
   // TaskNotCancelable is the variant when the server found the task but
   // refused to cancel — also acceptable for a probe with a bogus id.
   results.push(
-    await probe(endpoint, 'rpc.tasksCancel.notFound', 'should', {
-      title: `${methods.cancel} rejects an unknown task id`,
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 4,
-        method: methods.cancel,
-        params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
-      }),
-      acceptableErrorCodes: [
-        A2AErrorCode.TaskNotFoundError,
-        A2AErrorCode.TaskNotCancelableError,
-        JsonRpcErrorCode.InvalidParams,
-      ],
-    }),
+    await probe(
+      endpoint,
+      'rpc.tasksCancel.notFound',
+      'should',
+      {
+        title: `${methods.cancel} rejects an unknown task id`,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 4,
+          method: methods.cancel,
+          params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
+        }),
+        acceptableErrorCodes: [
+          A2AErrorCode.TaskNotFoundError,
+          A2AErrorCode.TaskNotCancelableError,
+          JsonRpcErrorCode.InvalidParams,
+        ],
+      },
+      po,
+    ),
   );
 
-  results.push(await batchCheck(endpoint));
+  results.push(await batchCheck(endpoint, po));
 
   return results;
 }
@@ -195,7 +234,7 @@ export async function jsonRpcChecks(
  * unwrapped response, or returning malformed JSON — all of those break
  * spec-compliant batch clients in subtle ways.
  */
-async function batchCheck(endpoint: string): Promise<CheckResult> {
+async function batchCheck(endpoint: string, po: ProbeOptions = {}): Promise<CheckResult> {
   const t0 = now();
   const id = 'rpc.batch';
   const title = 'Handles a JSON-RPC batch request';
@@ -208,6 +247,7 @@ async function batchCheck(endpoint: string): Promise<CheckResult> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body,
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
     const text = await readCappedText(res);
     let json: unknown;

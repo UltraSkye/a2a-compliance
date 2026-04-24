@@ -80,6 +80,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: Per-IP rate limit exceeded. Retry after the `Retry-After` header.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Seconds until the caller may try again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                rateLimited:
+                  value:
+                    error: rate limit exceeded — retry later
         '500':
           description: Probe failed — upstream error, DNS failure, timeout. Error messages are URL-redacted before reaching the client.
           content:

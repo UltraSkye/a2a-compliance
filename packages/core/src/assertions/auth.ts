@@ -5,7 +5,13 @@ import {
   isErrorResponse,
   JsonRpcResponseSchema,
 } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now, readCappedJson, readCappedText } from '../http.js';
+import {
+  fetchWithTimeout,
+  now,
+  type ProbeOptions,
+  readCappedJson,
+  readCappedText,
+} from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 import type { SpecMethods } from '../spec.js';
@@ -25,8 +31,9 @@ import type { SpecMethods } from '../spec.js';
 export async function authProbeChecks(
   baseUrl: string,
   methods: SpecMethods,
+  po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
-  const card = await fetchCard(baseUrl);
+  const card = await fetchCard(baseUrl, po);
   if (!card) return [];
 
   const schemes = card.authentication?.schemes ?? [];
@@ -38,16 +45,21 @@ export async function authProbeChecks(
 
   const endpoint = card.url;
   const results: CheckResult[] = [];
-  results.push(await anonChallengeCheck(endpoint, methods));
+  results.push(await anonChallengeCheck(endpoint, methods, schemes, po));
 
   if (schemes.includes('oauth2') || schemes.includes('openIdConnect')) {
-    results.push(await oauthDiscoveryCheck(baseUrl, card));
+    results.push(await oauthDiscoveryCheck(baseUrl, card, po));
   }
 
   return results;
 }
 
-async function anonChallengeCheck(endpoint: string, methods: SpecMethods): Promise<CheckResult> {
+async function anonChallengeCheck(
+  endpoint: string,
+  methods: SpecMethods,
+  schemes: readonly string[],
+  po: ProbeOptions = {},
+): Promise<CheckResult> {
   const t0 = now();
   const id = 'auth.anonChallenge';
   const title = `${methods.send} challenges unauthenticated callers`;
@@ -61,6 +73,7 @@ async function anonChallengeCheck(endpoint: string, methods: SpecMethods): Promi
         method: methods.send,
         params: { message: { role: 'user', parts: [{ type: 'text', text: 'anon probe' }] } },
       }),
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
 
     // HTTP-layer challenge: 401 with WWW-Authenticate is the textbook answer.
@@ -132,7 +145,7 @@ async function anonChallengeCheck(endpoint: string, methods: SpecMethods): Promi
       title,
       severity: 'should',
       status: 'fail',
-      message: `HTTP ${res.status} with no auth challenge — declared auth schemes ${''} are unenforced`,
+      message: `HTTP ${res.status} with no auth challenge — declared auth schemes [${schemes.join(', ')}] are unenforced`,
       durationMs: now() - t0,
     };
   } catch (err) {
@@ -147,7 +160,11 @@ async function anonChallengeCheck(endpoint: string, methods: SpecMethods): Promi
   }
 }
 
-async function oauthDiscoveryCheck(baseUrl: string, card: AgentCard): Promise<CheckResult> {
+async function oauthDiscoveryCheck(
+  baseUrl: string,
+  card: AgentCard,
+  po: ProbeOptions = {},
+): Promise<CheckResult> {
   const t0 = now();
   const id = 'auth.discovery';
   const title = 'OAuth / OIDC discovery endpoints are reachable';
@@ -172,7 +189,10 @@ async function oauthDiscoveryCheck(baseUrl: string, card: AgentCard): Promise<Ch
   const tried: string[] = [];
   for (const url of candidates) {
     try {
-      const res = await fetchWithTimeout(url, { method: 'GET' });
+      const res = await fetchWithTimeout(url, {
+        method: 'GET',
+        ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
+      });
       tried.push(`${url} → ${res.status}`);
       if (res.status >= 200 && res.status < 400) {
         return {
@@ -199,9 +219,12 @@ async function oauthDiscoveryCheck(baseUrl: string, card: AgentCard): Promise<Ch
   };
 }
 
-async function fetchCard(baseUrl: string): Promise<AgentCard | undefined> {
+async function fetchCard(baseUrl: string, po: ProbeOptions = {}): Promise<AgentCard | undefined> {
   try {
-    const res = await fetchWithTimeout(new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString());
+    const res = await fetchWithTimeout(
+      new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString(),
+      po.pinDns === undefined ? {} : { pinDns: po.pinDns },
+    );
     if (!res.ok) return undefined;
     const parsed = AgentCardSchema.safeParse(await readCappedJson(res));
     return parsed.success ? parsed.data : undefined;

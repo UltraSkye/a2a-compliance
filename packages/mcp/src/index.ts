@@ -31,6 +31,50 @@ function text(value: unknown): { content: Array<{ type: 'text'; text: string }> 
   return { content: [{ type: 'text', text: body }] };
 }
 
+// The LLM driving this MCP may be prompt-injected into probing internal URLs.
+// Reject non-http(s) schemes and refuse targets that resolve to private space.
+async function gateProbeUrl(
+  raw: string,
+): Promise<
+  | { ok: true }
+  | { ok: false; reply: { isError: true; content: Array<{ type: 'text'; text: string }> } }
+> {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return {
+      ok: false,
+      reply: { isError: true, content: [{ type: 'text', text: `invalid URL: ${raw}` }] },
+    };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      reply: {
+        isError: true,
+        content: [{ type: 'text', text: 'only http(s) URLs are accepted' }],
+      },
+    };
+  }
+  const safety = await ssrfCheckForUrl(raw);
+  if (!safety.ok) {
+    return {
+      ok: false,
+      reply: {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: 'target URL not permitted (resolved to private or non-routable space)',
+          },
+        ],
+      },
+    };
+  }
+  return { ok: true };
+}
+
 export function buildServer(): McpServer {
   const server = new McpServer(
     { name: '@a2a-compliance/mcp', version: VERSION },
@@ -50,6 +94,7 @@ export function buildServer(): McpServer {
         url: z
           .string()
           .url()
+          .max(2048)
           .describe(
             'Base URL of the A2A endpoint. The tool appends /.well-known/agent-card.json for discovery.',
           ),
@@ -62,7 +107,10 @@ export function buildServer(): McpServer {
       },
     },
     async ({ url, skipProtocol, skipSecurity, skipAuth }) => {
+      const gate = await gateProbeUrl(url);
+      if (!gate.ok) return gate.reply;
       const report = await runFullChecks(url, {
+        pinDns: true,
         ...(skipProtocol === undefined ? {} : { skipProtocol }),
         ...(skipSecurity === undefined ? {} : { skipSecurity }),
         ...(skipAuth === undefined ? {} : { skipAuth }),
@@ -78,10 +126,14 @@ export function buildServer(): McpServer {
       description:
         'Card-only compliance run. Faster than run_compliance when you only care about the agent card at /.well-known/agent-card.json (reachability, JSON, schema, Content-Type, URL shape, skills, protocolVersion).',
       inputSchema: {
-        url: z.string().url().describe('Base URL of the A2A endpoint.'),
+        url: z.string().url().max(2048).describe('Base URL of the A2A endpoint.'),
       },
     },
-    async ({ url }) => text(await runCardChecks(url)),
+    async ({ url }) => {
+      const gate = await gateProbeUrl(url);
+      if (!gate.ok) return gate.reply;
+      return text(await runCardChecks(url, { pinDns: true }));
+    },
   );
 
   server.registerTool(
@@ -108,6 +160,7 @@ export function buildServer(): McpServer {
       inputSchema: {
         id: z
           .string()
+          .max(128)
           .describe('The dotted check id, as printed by list_checks or a prior run_compliance.'),
       },
     },
@@ -130,7 +183,7 @@ export function buildServer(): McpServer {
       description:
         'Resolve a URL and refuse it when the resolved IP is in loopback, RFC 1918, link-local, CGNAT, ULA, or the cloud-metadata address 169.254.169.254. Usable by any MCP client as an ingress guard before passing a user-supplied URL to a fetcher.',
       inputSchema: {
-        url: z.string().describe('URL to check.'),
+        url: z.string().max(2048).describe('URL to check.'),
       },
     },
     async ({ url }) => text(await ssrfCheckForUrl(url)),
