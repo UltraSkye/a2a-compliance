@@ -84,7 +84,8 @@ else
 fi
 
 say "one last pack preview"
-for p in packages/schemas packages/core packages/cli; do
+# Must list every publishable package — release CI publishes all four.
+for p in packages/schemas packages/core packages/cli packages/mcp; do
   name="$(node -e "console.log(require('./$p/package.json').name)")"
   size="$(cd "$p" && npm pack --dry-run 2>&1 | awk '/package size/ {print $NF}')"
   printf "   %-28s %s\n" "$name" "$size"

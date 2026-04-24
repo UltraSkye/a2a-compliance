@@ -135,12 +135,16 @@ jobs:
             echo "::warning::HOMEBREW_TAP_TOKEN secret is not set — skipping tap update. Create UltraSkye/homebrew-a2a-compliance and add the secret to enable this step."
             exit 0
           fi
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/UltraSkye/homebrew-a2a-compliance.git" tap
+          # Auth header instead of PAT-in-URL so the token never lands in .git/config or log traces.
+          AUTH_HEADER="Authorization: Bearer ${GH_TOKEN}"
+          git -c "http.https://github.com/.extraheader=${AUTH_HEADER}" \
+            clone https://github.com/UltraSkye/homebrew-a2a-compliance.git tap
           mkdir -p tap/Formula
           cp /tmp/a2a-compliance.rb tap/Formula/a2a-compliance.rb
           cd tap
           git config user.name  'a2a-compliance-bot'
           git config user.email 'a2a-compliance-bot@users.noreply.github.com'
+          git config "http.https://github.com/.extraheader" "${AUTH_HEADER}"
           git add Formula/a2a-compliance.rb
           git commit -m "a2a-compliance ${{ steps.ver.outputs.version }}" || { echo "no changes"; exit 0; }
           git push origin HEAD

@@ -8,7 +8,7 @@ import {
   pushNotificationChecks,
 } from './assertions/index.js';
 import { decorateAll } from './decorate.js';
-import { fetchWithTimeout, readCappedJson } from './http.js';
+import { fetchWithTimeout, type ProbeOptions, readCappedJson } from './http.js';
 import { redactUrl } from './redact.js';
 import type { CheckResult, ComplianceReport } from './report.js';
 import { summarize } from './report.js';
@@ -21,6 +21,8 @@ export interface RunOptions {
   skipProtocol?: boolean;
   skipSecurity?: boolean;
   skipAuth?: boolean;
+  /** Pin DNS to the first resolved IP to close the rebinding TOCTOU. Default: false. */
+  pinDns?: boolean;
 }
 
 export async function runCardChecks(
@@ -29,7 +31,8 @@ export async function runCardChecks(
 ): Promise<ComplianceReport> {
   return withRunSpan(baseUrl, async () => {
     const startedAt = new Date().toISOString();
-    const checks = decorateAll(await agentCardChecks(baseUrl));
+    const probe: ProbeOptions = opts.pinDns === undefined ? {} : { pinDns: opts.pinDns };
+    const checks = decorateAll(await agentCardChecks(baseUrl, probe));
     const finishedAt = new Date().toISOString();
 
     return {
@@ -57,12 +60,13 @@ export async function runFullChecks(
 
 async function runFullChecksImpl(baseUrl: string, opts: RunOptions): Promise<ComplianceReport> {
   const startedAt = new Date().toISOString();
+  const probe: ProbeOptions = opts.pinDns === undefined ? {} : { pinDns: opts.pinDns };
 
-  const cardResults = await agentCardChecks(baseUrl);
+  const cardResults = await agentCardChecks(baseUrl, probe);
   // Discovery is decoupled from the protocol probe switch: we still need
   // to know the declared protocolVersion for the card.protocolVersion
   // check, even when the caller passed --skip-protocol.
-  const discovery = await discover(baseUrl);
+  const discovery = await discover(baseUrl, probe);
 
   const version: SpecVersion = resolveSpecVersion(discovery?.protocolVersion);
   const methods = methodsFor(version);
@@ -73,15 +77,18 @@ async function runFullChecksImpl(baseUrl: string, opts: RunOptions): Promise<Com
   const protocolResults =
     !opts.skipProtocol && discovery
       ? [
-          ...(await jsonRpcChecks(discovery.endpoint, methods)),
-          ...(await methodChecks(discovery.endpoint, methods, {
-            streaming: discovery.streaming === true,
-          })),
-          ...(await pushNotificationChecks(baseUrl, discovery.endpoint, methods)),
+          ...(await jsonRpcChecks(discovery.endpoint, methods, probe)),
+          ...(await methodChecks(
+            discovery.endpoint,
+            methods,
+            { streaming: discovery.streaming === true },
+            probe,
+          )),
+          ...(await pushNotificationChecks(baseUrl, discovery.endpoint, methods, probe)),
         ]
       : [];
-  const securityResults = opts.skipSecurity ? [] : await cardSsrfChecks(baseUrl);
-  const authResults = opts.skipAuth ? [] : await authProbeChecks(baseUrl, methods);
+  const securityResults = opts.skipSecurity ? [] : await cardSsrfChecks(baseUrl, probe);
+  const authResults = opts.skipAuth ? [] : await authProbeChecks(baseUrl, methods, probe);
 
   const checks = decorateAll([
     ...cardResults,
@@ -109,10 +116,13 @@ interface Discovery {
   pushNotifications: boolean | undefined;
 }
 
-async function discover(baseUrl: string): Promise<Discovery | undefined> {
+async function discover(baseUrl: string, probe: ProbeOptions = {}): Promise<Discovery | undefined> {
   const cardUrl = new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString();
   try {
-    const res = await fetchWithTimeout(cardUrl);
+    const res = await fetchWithTimeout(
+      cardUrl,
+      probe.pinDns === undefined ? {} : { pinDns: probe.pinDns },
+    );
     if (!res.ok) return undefined;
     const parsed = AgentCardSchema.safeParse(await readCappedJson(res));
     if (!parsed.success) return undefined;

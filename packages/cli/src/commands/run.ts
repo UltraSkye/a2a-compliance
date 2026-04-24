@@ -120,7 +120,7 @@ export function registerRunCommand(program: Command): void {
 // the matcher with `echo "::add-matcher::.github/problem-matchers/a2a-compliance.json"`
 // in their workflow before running this command; GitHub then turns
 // each line into a PR annotation.
-function toProblemMatcherLines(report: ComplianceReport): string[] {
+export function toProblemMatcherLines(report: ComplianceReport): string[] {
   const lines: string[] = [];
   for (const c of report.checks) {
     if (c.status === 'pass' || c.status === 'skip') continue;
@@ -136,7 +136,9 @@ function toProblemMatcherLines(report: ComplianceReport): string[] {
     // source to highlight), but the annotation stays associated with
     // the right logical "file" (the agent itself).
     const file = report.target;
-    const msg = (c.message ?? c.title).replace(/[\r\n]+/g, ' ');
+    // `::` is the field separator — neutralise it inside agent-controlled
+    // strings so a hostile message can't forge extra annotation fields.
+    const msg = (c.message ?? c.title).replace(/[\r\n]+/g, ' ').replaceAll('::', ': :');
     lines.push(`::a2a::${severity}::${c.id}::${file}:1:1::${msg}`);
   }
   return lines;

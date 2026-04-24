@@ -96,3 +96,19 @@ podAnnotations: {}
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Opt-in NetworkPolicy. Egress rules block RFC 1918 / link-local / CGNAT /
+# cloud-metadata so a prompt-injected probe or a compromised pod can't
+# reach the cluster's internal network. Requires a CNI with NetworkPolicy
+# support (Calico, Cilium, etc.). Default off to avoid breaking clusters
+# without a supporting CNI.
+networkPolicy:
+  enabled: false
+  # Ingress defaults to any source on service port. Override with a pod/
+  # namespace selector to scope to specific callers.
+  ingress: []
+  # Add CIDRs that should also be blocked from egress (e.g. org-specific
+  # private ranges, VPN peers, cloud-metadata v4 for specific clouds).
+  extraExceptCidrs: []
+  # Extra egress rules in the same schema as networking.k8s.io/v1.
+  extraEgress: []

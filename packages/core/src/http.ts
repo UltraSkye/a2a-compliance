@@ -36,6 +36,10 @@ function readPackageVersion(): string {
 }
 export const USER_AGENT = `a2a-compliance/${readPackageVersion()}`;
 
+export interface ProbeOptions {
+  pinDns?: boolean;
+}
+
 export interface FetchOptions {
   method?: string;
   headers?: Record<string, string>;

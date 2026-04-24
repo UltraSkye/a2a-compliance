@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 import './globals.css';
 
@@ -25,10 +26,11 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body {...(nonce ? { 'data-nonce': nonce } : {})}>{children}</body>
     </html>
   );
 }

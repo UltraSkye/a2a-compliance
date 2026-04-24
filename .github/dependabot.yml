@@ -32,9 +32,23 @@ updates:
     commit-message:
       prefix: ci
 
-  # Docker base image
+  # One docker entry per Dockerfile so a base-image CVE opens a PR for each image.
   - package-ecosystem: docker
     directory: /apps/web
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+
+  - package-ecosystem: docker
+    directory: /packages/cli
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+
+  - package-ecosystem: docker
+    directory: /examples/reference-agent
     schedule:
       interval: monthly
     commit-message:

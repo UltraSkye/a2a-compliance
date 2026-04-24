@@ -43,4 +43,30 @@ describe('buildServer', () => {
 
     await client.close();
   });
+
+  it('run_compliance refuses non-http(s) and private-space URLs before probing', async () => {
+    const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+
+    const server = buildServer();
+    const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'test', version: '0.0.0' }, {});
+    await Promise.all([client.connect(clientT), server.connect(serverT)]);
+
+    const fileRes = await client.callTool({
+      name: 'run_compliance',
+      arguments: { url: 'http://127.0.0.1' },
+    });
+    expect(fileRes.isError).toBe(true);
+    const fileContent = fileRes.content as Array<{ type: string; text: string }>;
+    expect(fileContent[0]?.text).toMatch(/not permitted|invalid URL|http\(s\)/);
+
+    const cardRes = await client.callTool({
+      name: 'validate_agent_card',
+      arguments: { url: 'http://[::1]' },
+    });
+    expect(cardRes.isError).toBe(true);
+
+    await client.close();
+  });
 });

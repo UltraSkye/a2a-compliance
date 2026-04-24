@@ -4,6 +4,85 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning: [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+Multi-pass security audit with concrete fixes across `core`, `mcp`,
+the hosted web dashboard, CI/CD, and Helm chart.
+
+- **DNS-rebinding TOCTOU closed end-to-end.** `RunOptions.pinDns` is
+  now plumbed through `runFullChecks` / `runCardChecks` to every
+  `fetchWithTimeout` call in the probe chain. The hosted web API
+  and the MCP server both opt in with `pinDns: true` so the
+  SSRF-guard → actual-fetch gap that SECURITY.md previously listed
+  as a residual risk is closed at the library layer.
+- **MCP SSRF gate.** `run_compliance` / `validate_agent_card` now
+  reject non-http(s) URLs and private-space targets before dispatch,
+  preventing an LLM tricked by prompt injection from turning the MCP
+  server into an internal-network probe. Input length caps on all
+  MCP tool schemas.
+- **Web API internal-IP leak closed.** `/api/check` no longer echoes
+  error messages that may embed hostnames or IPs discovered behind
+  the SSRF guard (e.g. a public URL 302-ing to `10.0.0.5`). Errors
+  are logged server-side and the client gets a generic
+  `"probe failed"` reply.
+- **OpenTelemetry credential leak.** `withRunSpan` now runs the
+  `target` URL through `redactUrl` before setting the
+  `a2a.target` span attribute, preventing `user:pass@` /
+  `?token=` leakage into external OTel backends.
+- **Rate limit on `/api/check`.** In-process token bucket, 10 req /
+  60 s per IP, `TRUST_PROXY=1` opt-in for `X-Forwarded-For`.
+  Returns `429` with `Retry-After`.
+- **Nonce-based CSP.** `middleware.ts` generates a per-request
+  nonce; `script-src` drops `'unsafe-inline'` in favour of
+  `'nonce-...' 'strict-dynamic'`. `HSTS`, `COOP`, `COEP`, `CORP`
+  added alongside the existing defence-in-depth headers.
+- **Problem-matcher injection closed.** CLI's `--problem-matcher`
+  output now neutralises `::` sequences inside agent-controlled
+  `message` strings so a hostile endpoint can't forge extra
+  annotation fields on GitHub PRs.
+- **Helm chart NetworkPolicy** template, opt-in via
+  `networkPolicy.enabled: true`. Egress denies RFC 1918 /
+  link-local / CGNAT / cloud-metadata to provide the
+  network-layer defence-in-depth SECURITY.md recommends.
+- **`spec-drift.yml` workflow fixed.** The inlined Node script
+  mixed `require()` and top-level `await`, failing Node 22+.
+  Wrapped in an async IIFE so the weekly drift probe actually
+  runs.
+- **`cosign` bootstrap hardened.** `publish-images.yml` used
+  `curl | chmod | sudo mv` with no checksum; replaced with the
+  official `sigstore/cosign-installer@v3` action.
+- **`homebrew.yml` no longer embeds the PAT in the clone URL.**
+  Token is now passed via `http.extraheader` so it doesn't land
+  in `.git/config` or command traces.
+- **License compliance.** `packages/mcp/LICENSE` was a symlink
+  that `npm pack` doesn't follow (`pnpm pack` does), so a future
+  switch to npm tooling would have silently published the
+  package without its LICENSE. Replaced with a real file.
+- **`@a2a-compliance/mcp` keywords** bumped 23 → 50 to match the
+  rest of the workspace (findability on npm).
+- **CI hygiene.** Workflow-level `permissions: contents: read`
+  default on `ci.yml`; weekly Trivy schedule; Dependabot docker
+  coverage extended to `/packages/cli` and
+  `/examples/reference-agent`; duplicate web typecheck job
+  removed; `scripts/release.sh` pack-preview now includes
+  `packages/mcp`.
+- **Auth probe message fix.** `auth.anonChallenge` rendered an
+  empty `${''}` in its failure message instead of the declared
+  schemes list — now shows `[oauth2, bearer]`.
+
+### Added
+
+- `ProbeOptions` type exported from `@a2a-compliance/core`.
+- Rate-limit module (`apps/web/app/api/check/rate-limit.ts`).
+- Next.js middleware (`apps/web/middleware.ts`).
+- Helm `NetworkPolicy` template.
+- CLI regression test for problem-matcher injection.
+- Core regression tests for `pinDns` plumbing.
+- MCP regression test for URL gating.
+- `429` response documented in `apps/web/openapi.yaml`.
+
 ## [0.3.2] - 2026-04-18
 
 ### Security

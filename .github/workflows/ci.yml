@@ -8,6 +8,12 @@ on:
   # before they land. The default-branch-only form blocks feedback
   # on anything not retargeted to main.
   pull_request: {}
+  # Weekly Trivy rescan catches newly-disclosed CVEs even when no PR lands.
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
 
 jobs:
   packages:
@@ -52,7 +58,7 @@ jobs:
       - run: pnpm -r --filter=./packages/* exec npx vitest run --coverage
 
   web:
-    name: web (typecheck + build)
+    name: web build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +74,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r --filter=./packages/* build
-      - run: pnpm --filter @a2a-compliance/web typecheck
+      # Typecheck runs in the packages matrix; this job covers the Next.js build.
       - run: pnpm --filter @a2a-compliance/web build
 
   # Filesystem + config vulnerability scan with Trivy. Runs on every

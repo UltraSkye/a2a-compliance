@@ -1,16 +1,22 @@
 import { AGENT_CARD_WELL_KNOWN_PATH, AgentCardSchema } from '@a2a-compliance/schemas';
-import { fetchWithTimeout, now, readCappedJson } from '../http.js';
+import { fetchWithTimeout, now, type ProbeOptions, readCappedJson } from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
 
-export async function agentCardChecks(baseUrl: string): Promise<CheckResult[]> {
+export async function agentCardChecks(
+  baseUrl: string,
+  probe: ProbeOptions = {},
+): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
   const cardUrl = new URL(AGENT_CARD_WELL_KNOWN_PATH, baseUrl).toString();
 
   const t0 = now();
   let res: Response | undefined;
   try {
-    res = await fetchWithTimeout(cardUrl);
+    res = await fetchWithTimeout(
+      cardUrl,
+      probe.pinDns === undefined ? {} : { pinDns: probe.pinDns },
+    );
     results.push({
       id: 'card.reachable',
       title: `Agent card reachable at ${AGENT_CARD_WELL_KNOWN_PATH}`,

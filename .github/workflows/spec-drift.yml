@@ -36,35 +36,40 @@ jobs:
             exit 2
           fi
 
+          # Wrapped in an async IIFE — `require()` + top-level `await` in a
+          # single CJS file is a parse error in Node 22+.
           drift_json=$(node <<'NODE'
           const fs = require('node:fs');
           const crypto = require('node:crypto');
 
-          const baseline = JSON.parse(fs.readFileSync('packages/schemas/spec-baseline.json', 'utf8'));
-          const results = [];
+          (async () => {
+            const baseline = JSON.parse(fs.readFileSync('packages/schemas/spec-baseline.json', 'utf8'));
+            const results = [];
 
-          for (const [name, entry] of Object.entries(baseline.artefacts)) {
-            let bodyHash;
-            let status;
-            try {
-              const r = await fetch(entry.url, { redirect: 'follow' });
-              if (!r.ok) {
-                results.push({ name, url: entry.url, status: 'error', detail: `HTTP ${r.status}` });
-                continue;
+            for (const [name, entry] of Object.entries(baseline.artefacts)) {
+              try {
+                const r = await fetch(entry.url, { redirect: 'follow' });
+                if (!r.ok) {
+                  results.push({ name, url: entry.url, status: 'error', detail: `HTTP ${r.status}` });
+                  continue;
+                }
+                const buf = Buffer.from(await r.arrayBuffer());
+                const bodyHash = crypto.createHash('sha256').update(buf).digest('hex');
+                const status = bodyHash === entry.sha256 ? 'unchanged' : 'changed';
+                results.push({ name, url: entry.url, status, was: entry.sha256, now: bodyHash });
+              } catch (err) {
+                results.push({ name, url: entry.url, status: 'error', detail: err?.message ?? String(err) });
               }
-              const buf = Buffer.from(await r.arrayBuffer());
-              bodyHash = crypto.createHash('sha256').update(buf).digest('hex');
-              status = bodyHash === entry.sha256 ? 'unchanged' : 'changed';
-              results.push({ name, url: entry.url, status, was: entry.sha256, now: bodyHash });
-            } catch (err) {
-              results.push({ name, url: entry.url, status: 'error', detail: err?.message ?? String(err) });
             }
-          }
 
-          fs.writeFileSync('/tmp/spec-drift.json', JSON.stringify({ results }, null, 2));
-          const changed = results.some((r) => r.status === 'changed');
-          const errored = results.some((r) => r.status === 'error');
-          console.log(JSON.stringify({ changed, errored }));
+            fs.writeFileSync('/tmp/spec-drift.json', JSON.stringify({ results }, null, 2));
+            const changed = results.some((r) => r.status === 'changed');
+            const errored = results.some((r) => r.status === 'error');
+            console.log(JSON.stringify({ changed, errored }));
+          })().catch((err) => {
+            console.error('spec-drift script failed:', err);
+            process.exit(1);
+          });
           NODE
           )
 

@@ -24,8 +24,22 @@ export default function Page() {
         body: JSON.stringify({ url }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        setResult({ kind: 'error', message: text || `HTTP ${res.status}` });
+        let parsed: { error?: string } = {};
+        try {
+          parsed = await res.json();
+        } catch {
+          parsed = { error: await res.text() };
+        }
+        if (res.status === 429) {
+          const retryAfter = res.headers.get('retry-after');
+          const waitHint = retryAfter ? ` Retry in ~${retryAfter}s.` : '';
+          setResult({
+            kind: 'error',
+            message: `${parsed.error ?? 'rate limit exceeded'}.${waitHint}`,
+          });
+          return;
+        }
+        setResult({ kind: 'error', message: parsed.error || `HTTP ${res.status}` });
         return;
       }
       const report = (await res.json()) as ComplianceReport;

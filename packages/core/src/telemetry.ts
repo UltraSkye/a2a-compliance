@@ -1,3 +1,4 @@
+import { redactUrl } from './redact.js';
 import type { CheckResult } from './report.js';
 
 /**
@@ -116,7 +117,9 @@ export async function withRunSpan<T>(target: string, fn: () => Promise<T>): Prom
   const tracer = api.trace.getTracer('@a2a-compliance/core');
   return tracer.startActiveSpan('a2a-compliance.run', async (span: OtelSpan) => {
     try {
-      span.setAttributes({ 'a2a.target': target });
+      // Redact credentials + secret query params — OTel backends are usually
+      // external services and raw target URL can carry user:pass@ or ?token=.
+      span.setAttributes({ 'a2a.target': redactUrl(target) });
       const result = await fn();
       span.setStatus({ code: api.SpanStatusCode.OK });
       return result;

@@ -52,13 +52,18 @@ access.
   check time; the actual HTTP connection happens milliseconds later
   against whatever DNS returns then. A malicious authoritative DNS can
   answer with a public IP for the check, then a private IP for the
-  fetch. No user-space fix short of bypassing libc resolution and
-  pinning to the checked address.
-  Mitigation: run the hosted dashboard inside a network namespace that
-  blocks egress to RFC 1918 / link-local / carrier-NAT ranges. Docker:
-  `--network none` with an explicit allowlist egress proxy, or an AWS
-  security group / GCP firewall rule denying 10/8, 172.16/12,
-  192.168/16, 169.254/16 on the container's egress interface.
+  fetch.
+  In-process mitigation (enabled by the hosted web API): pass
+  `runFullChecks(url, { pinDns: true })` or `fetchWithTimeout(url,
+  { pinDns: true })`. That resolves the hostname once, refuses private
+  IPs, and forces undici to connect to that address for every hop —
+  closing the TOCTOU without bypassing libc resolution.
+  Network-level defence-in-depth (recommended on top of pinDns):
+  run the hosted dashboard inside a network namespace that blocks
+  egress to RFC 1918 / link-local / carrier-NAT ranges. Docker:
+  an explicit allowlist egress proxy, or an AWS security group /
+  GCP firewall rule denying 10/8, 172.16/12, 192.168/16, 169.254/16
+  on the container's egress interface.
 
 ## Previously-residual, now closed
 

@@ -1,0 +1,60 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "a2a-compliance-web.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "a2a-compliance-web.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "a2a-compliance-web.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- with .Values.networkPolicy.ingress }}
+    {{- toYaml . | nindent 4 }}
+    {{- else }}
+    - from: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+    {{- end }}
+  egress:
+    # DNS — required for outbound probe hostname resolution.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Public-internet HTTP(S). RFC 1918 + link-local + CGNAT + cloud-metadata
+    # are excluded so a compromised / misused pod can't reach the cluster's
+    # internal network or cloud metadata service. This is the network-layer
+    # defence-in-depth SECURITY.md describes on top of in-process pinDns.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 0.0.0.0/8
+              {{- with .Values.networkPolicy.extraExceptCidrs }}
+              {{- toYaml . | nindent 14 }}
+              {{- end }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    {{- with .Values.networkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
