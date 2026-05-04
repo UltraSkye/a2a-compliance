@@ -25,7 +25,7 @@
     "pre-commit": "pnpm lint"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.13",
+    "@biomejs/biome": "^2.4.14",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.4",
     "simple-git-hooks": "^2.13.1",
