@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: shared base with pnpm ----
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /repo
@@ -30,7 +30,7 @@ COPY apps/web apps/web
 RUN pnpm --filter '@a2a-compliance/web...' build
 
 # ---- Stage 4: minimal runtime image ----
-FROM node:24-bookworm-slim AS runner
+FROM node:26-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
