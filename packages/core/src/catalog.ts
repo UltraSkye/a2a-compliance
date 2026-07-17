@@ -155,6 +155,15 @@ export const CHECK_CATALOG: Record<string, CheckMeta> = {
       'message/stream SHOULD respond with Content-Type: text/event-stream. When capabilities.streaming is declared, this check is promoted to MUST.',
     specRef: { section: 'message/stream', url: `${A2A}#message-stream` },
   },
+  'rpc.tasksList.shape': {
+    id: 'rpc.tasksList.shape',
+    category: 'methods',
+    severity: 'should',
+    title: 'ListTasks returns a valid JSON-RPC response',
+    description:
+      'Spec 1.0 core method: ListTasks with empty filters SHOULD return a valid ListTasksResponse or a well-formed error. Unauthenticated refusal is tolerated as a warning — the check verifies response shape, not open access. Probed only on the 1.0 binding.',
+    specRef: { section: 'ListTasks', url: `${A2A}#list-tasks` },
+  },
   'rpc.pushNotifications.capability': {
     id: 'rpc.pushNotifications.capability',
     category: 'methods',

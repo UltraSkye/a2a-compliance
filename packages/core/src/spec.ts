@@ -8,6 +8,8 @@ export interface SpecMethods {
   resubscribe: string;
   pushSet: string;
   pushGet: string;
+  /** 1.0 introduced task listing; earlier bindings have no equivalent. */
+  list?: string;
 }
 
 // Method names per A2A spec version. 0.2 used the tasks/* namespace,
@@ -40,6 +42,7 @@ export const SPEC_METHODS: Record<SpecVersion, SpecMethods> = {
     resubscribe: 'SubscribeToTask',
     pushSet: 'CreateTaskPushNotificationConfig',
     pushGet: 'GetTaskPushNotificationConfig',
+    list: 'ListTasks',
   },
 };
 

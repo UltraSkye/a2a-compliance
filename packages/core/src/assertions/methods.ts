@@ -2,6 +2,7 @@ import {
   isErrorResponse,
   JsonRpcErrorCode,
   JsonRpcResponseSchema,
+  ListTasksResponseV1Schema,
   MessageSchema,
   makeProbeMessage,
   makeProbeMessageV1,
@@ -252,16 +253,109 @@ export async function messageStreamContentTypeCheck(
   }
 }
 
+// Unauthenticated listing may be legitimately refused; the check verifies
+// response shape, not that the agent hands its task list to strangers.
+const TOLERATED_LIST_ERROR_CODES: number[] = [
+  JsonRpcErrorCode.InvalidParams,
+  JsonRpcErrorCode.InternalError,
+  -32004,
+];
+
+export async function listTasksCheck(
+  endpoint: string,
+  profile: SpecProfile,
+  po: ProbeOptions = {},
+): Promise<CheckResult | undefined> {
+  const method = profile.methods.list;
+  if (method === undefined) return undefined;
+
+  const t0 = now();
+  const title = `${method} returns a valid JSON-RPC response`;
+  const body = JSON.stringify({ jsonrpc: '2.0', id: 6, method, params: {} });
+
+  try {
+    const res = await fetchWithTimeout(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...profile.headers },
+      body,
+      ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
+    });
+
+    const text = await readCappedText(res);
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return listFail(title, `response body is not JSON (HTTP ${res.status})`, t0);
+    }
+
+    const parsed = JsonRpcResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      return listFail(
+        title,
+        'response is not a valid JSON-RPC 2.0 envelope',
+        t0,
+        parsed.error.issues,
+      );
+    }
+
+    if (isErrorResponse(parsed.data)) {
+      const code = parsed.data.error.code;
+      const toleratedOk = TOLERATED_LIST_ERROR_CODES.includes(code);
+      const agentMsg = redactInText(parsed.data.error.message);
+      return {
+        id: 'rpc.tasksList.shape',
+        title,
+        severity: 'should',
+        status: toleratedOk ? 'warn' : 'fail',
+        message: toleratedOk
+          ? `agent rejected probe with tolerated error ${code}: ${agentMsg}`
+          : `unexpected error code ${code}: ${agentMsg}`,
+        durationMs: now() - t0,
+      };
+    }
+
+    const asList = ListTasksResponseV1Schema.safeParse(parsed.data.result);
+    if (asList.success) {
+      return {
+        id: 'rpc.tasksList.shape',
+        title,
+        severity: 'should',
+        status: 'pass',
+        durationMs: now() - t0,
+      };
+    }
+    return listFail(title, 'result is not a valid ListTasksResponse', t0, asList.error.issues);
+  } catch (err) {
+    return listFail(title, redactInText(err instanceof Error ? err.message : String(err)), t0);
+  }
+}
+
+function listFail(title: string, message: string, t0: number, evidence?: unknown): CheckResult {
+  return {
+    id: 'rpc.tasksList.shape',
+    title,
+    severity: 'should',
+    status: 'fail',
+    message,
+    ...(evidence === undefined ? {} : { evidence }),
+    durationMs: now() - t0,
+  };
+}
+
 export async function methodChecks(
   endpoint: string,
   profile: SpecProfile,
   hints: CapabilityHints = {},
   po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
-  return [
+  const results = [
     await messageSendCheck(endpoint, profile, po),
     await messageStreamContentTypeCheck(endpoint, profile, hints, po),
   ];
+  const list = await listTasksCheck(endpoint, profile, po);
+  if (list) results.push(list);
+  return results;
 }
 
 function fail(

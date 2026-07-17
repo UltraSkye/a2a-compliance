@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { TaskSchema, TaskStateSchema, TaskStatusSchema, TaskV1Schema } from './task.js';
+import {
+  ListTasksResponseV1Schema,
+  TaskSchema,
+  TaskStateSchema,
+  TaskStatusSchema,
+  TaskV1Schema,
+} from './task.js';
 
 describe('TaskStateSchema', () => {
   it.each([
@@ -88,5 +94,26 @@ describe('TaskV1Schema (1.0 proto-JSON)', () => {
   it('rejects 0.3-style lowercase states', () => {
     const t = { id: 't-1', status: { state: 'auth-required' } };
     expect(TaskV1Schema.safeParse(t).success).toBe(false);
+  });
+});
+
+describe('ListTasksResponseV1Schema', () => {
+  it('accepts a populated listing', () => {
+    const r = {
+      tasks: [{ id: 't-1', status: { state: 'TASK_STATE_WORKING' } }],
+      nextPageToken: 'abc',
+      pageSize: 50,
+      totalSize: 120,
+    };
+    expect(ListTasksResponseV1Schema.safeParse(r).success).toBe(true);
+  });
+
+  it('accepts an empty object — proto3 JSON omits default fields', () => {
+    expect(ListTasksResponseV1Schema.safeParse({}).success).toBe(true);
+  });
+
+  it('rejects tasks with 0.3-style states', () => {
+    const r = { tasks: [{ id: 't-1', status: { state: 'working' } }] };
+    expect(ListTasksResponseV1Schema.safeParse(r).success).toBe(false);
   });
 });

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { profileFor } from '../spec.js';
-import { messageSendCheck, messageStreamContentTypeCheck } from './methods.js';
+import {
+  listTasksCheck,
+  messageSendCheck,
+  messageStreamContentTypeCheck,
+  methodChecks,
+} from './methods.js';
 
 const ENDPOINT = 'https://agent.example.com/a2a';
 const PROFILE = profileFor('0.3');
@@ -147,6 +152,69 @@ describe('messageSendCheck — 1.0 binding', () => {
     expect(body.params.message.role).toBe('ROLE_USER');
     expect(body.params.message.parts[0]).toHaveProperty('text');
     expect(body.params.message.parts[0]).not.toHaveProperty('kind');
+  });
+});
+
+describe('listTasksCheck', () => {
+  const V1 = profileFor('1.0');
+
+  it('is skipped entirely on pre-1.0 bindings', async () => {
+    expect(await listTasksCheck(ENDPOINT, PROFILE)).toBeUndefined();
+    mockJson(200, { jsonrpc: '2.0', id: 6, error: { code: -32601, message: 'x' } });
+    const results = await methodChecks(ENDPOINT, PROFILE);
+    expect(results.some((r) => r.id === 'rpc.tasksList.shape')).toBe(false);
+  });
+
+  it('passes on a valid ListTasksResponse', async () => {
+    mockJson(200, {
+      jsonrpc: '2.0',
+      id: 6,
+      result: {
+        tasks: [{ id: 't-1', status: { state: 'TASK_STATE_COMPLETED' } }],
+        nextPageToken: '',
+        pageSize: 50,
+        totalSize: 1,
+      },
+    });
+    const r = await listTasksCheck(ENDPOINT, V1);
+    expect(r?.status).toBe('pass');
+  });
+
+  it('passes on an empty proto3-JSON listing (all default fields omitted)', async () => {
+    mockJson(200, { jsonrpc: '2.0', id: 6, result: {} });
+    const r = await listTasksCheck(ENDPOINT, V1);
+    expect(r?.status).toBe('pass');
+  });
+
+  it('warns on tolerated unauthenticated refusal', async () => {
+    mockJson(200, { jsonrpc: '2.0', id: 6, error: { code: -32004, message: 'nope' } });
+    const r = await listTasksCheck(ENDPOINT, V1);
+    expect(r?.status).toBe('warn');
+  });
+
+  it('fails on unexpected error codes and on 0.3-style task states', async () => {
+    mockJson(200, { jsonrpc: '2.0', id: 6, error: { code: -32601, message: 'unknown' } });
+    expect((await listTasksCheck(ENDPOINT, V1))?.status).toBe('fail');
+
+    mockJson(200, {
+      jsonrpc: '2.0',
+      id: 6,
+      result: { tasks: [{ id: 't-1', status: { state: 'completed' } }] },
+    });
+    const r = await listTasksCheck(ENDPOINT, V1);
+    expect(r?.status).toBe('fail');
+    expect(r?.message).toMatch(/ListTasksResponse/);
+  });
+
+  it('sends ListTasks with empty params and the A2A-Version header', async () => {
+    mockJson(200, { jsonrpc: '2.0', id: 6, result: {} });
+    await listTasksCheck(ENDPOINT, V1);
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers as Record<string, string>).get('A2A-Version')).toBe('1.0');
+    const body = JSON.parse(init.body as string) as { method: string; params: unknown };
+    expect(body.method).toBe('ListTasks');
+    expect(body.params).toEqual({});
   });
 });
 
