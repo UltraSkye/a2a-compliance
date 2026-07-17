@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TaskSchema, TaskStateSchema, TaskStatusSchema } from './task.js';
+import { TaskSchema, TaskStateSchema, TaskStatusSchema, TaskV1Schema } from './task.js';
 
 describe('TaskStateSchema', () => {
   it.each([
@@ -76,5 +76,17 @@ describe('TaskSchema', () => {
 
   it('rejects task without status', () => {
     expect(TaskSchema.safeParse({ id: 'x' }).success).toBe(false);
+  });
+});
+
+describe('TaskV1Schema (1.0 proto-JSON)', () => {
+  it('accepts TASK_STATE_* states', () => {
+    const t = { id: 't-1', status: { state: 'TASK_STATE_AUTH_REQUIRED' } };
+    expect(TaskV1Schema.safeParse(t).success).toBe(true);
+  });
+
+  it('rejects 0.3-style lowercase states', () => {
+    const t = { id: 't-1', status: { state: 'auth-required' } };
+    expect(TaskV1Schema.safeParse(t).success).toBe(false);
   });
 });

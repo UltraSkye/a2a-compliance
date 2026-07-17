@@ -193,13 +193,13 @@ describe('runFullChecks', () => {
     expect(dispatcherSeen.every((v) => v === false)).toBe(true);
   });
 
-  it('selects v0.3 method names when the card declares protocolVersion: "0.3"', async () => {
-    const v03 = { ...validCard, protocolVersion: '0.3' };
+  it('selects 0.2 method names when the card declares protocolVersion: "0.2"', async () => {
+    const v02 = { ...validCard, protocolVersion: '0.2' };
     const calls: string[] = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        if (url.includes('/.well-known/agent-card.json')) return okJson(v03);
+        if (url.includes('/.well-known/agent-card.json')) return okJson(v02);
         if (init?.body) {
           try {
             const body = JSON.parse(init.body as string) as { method?: string };
@@ -210,9 +210,35 @@ describe('runFullChecks', () => {
       }),
     );
     await runFullChecks('https://agent.example.com', { skipSecurity: true });
-    // v0.3 calls tasks/send and tasks/sendSubscribe; v1.0 calls message/send and message/stream.
     expect(calls).toContain('tasks/send');
     expect(calls).toContain('tasks/sendSubscribe');
     expect(calls).not.toContain('message/send');
+  });
+
+  it('selects 1.0 PascalCase methods and sends A2A-Version when the card declares 1.0', async () => {
+    const v10 = { ...validCard, protocolVersion: '1.0' };
+    const calls: string[] = [];
+    const versionHeaders: Array<string | undefined> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes('/.well-known/agent-card.json')) return okJson(v10);
+        if (init?.body) {
+          try {
+            const body = JSON.parse(init.body as string) as { method?: string };
+            if (body.method) calls.push(body.method);
+            versionHeaders.push(
+              new Headers(init.headers as Record<string, string>).get('A2A-Version') ?? undefined,
+            );
+          } catch {}
+        }
+        return okJson({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'x' } });
+      }),
+    );
+    await runFullChecks('https://agent.example.com', { skipSecurity: true });
+    expect(calls).toContain('SendMessage');
+    expect(calls).toContain('SendStreamingMessage');
+    expect(calls).not.toContain('message/send');
+    expect(versionHeaders).toContain('1.0');
   });
 });

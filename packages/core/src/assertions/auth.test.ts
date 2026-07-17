@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { methodsFor } from '../spec.js';
+import { profileFor } from '../spec.js';
 import { authProbeChecks } from './auth.js';
 
 const BASE = 'https://agent.example.com';
@@ -47,7 +47,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => okJson(cardWithNone)),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results).toHaveLength(0);
   });
 
@@ -64,7 +64,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results.find((r) => r.id === 'auth.anonChallenge')?.status).toBe('pass');
     expect(results.find((r) => r.id === 'auth.anonChallenge')?.message).toMatch(/Bearer/);
   });
@@ -76,7 +76,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results[0]?.status).toBe('warn');
   });
 
@@ -90,7 +90,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results[0]?.status).toBe('pass');
   });
 
@@ -104,7 +104,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results[0]?.status).toBe('fail');
   });
 
@@ -115,7 +115,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results[0]?.status).toBe('pass');
     expect(results[0]?.message).toMatch(/403/);
   });
@@ -127,7 +127,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results[0]?.status).toBe('fail');
     expect(results[0]?.message).toMatch(/not JSON/);
   });
@@ -143,7 +143,7 @@ describe('authProbeChecks', () => {
         throw new Error('refused');
       }),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results[0]?.status).toBe('fail');
   });
 
@@ -152,7 +152,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => new Response('', { status: 500 })),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results).toHaveLength(0);
   });
 
@@ -168,7 +168,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? new Response('', { status: 404 })),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results.find((r) => r.id === 'auth.discovery')?.status).toBe('warn');
   });
 
@@ -183,7 +183,7 @@ describe('authProbeChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await authProbeChecks(BASE, methodsFor('1.0'));
+    const results = await authProbeChecks(BASE, profileFor('0.3'));
     expect(results.map((r) => r.id)).toContain('auth.discovery');
     expect(results.find((r) => r.id === 'auth.discovery')?.status).toBe('pass');
   });

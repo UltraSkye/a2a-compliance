@@ -13,7 +13,12 @@ import { redactUrl } from './redact.js';
 import type { CheckResult, ComplianceReport } from './report.js';
 import { summarize } from './report.js';
 import type { SpecVersion } from './spec.js';
-import { KNOWN_SPEC_VERSIONS, methodsFor, resolveSpecVersion } from './spec.js';
+import {
+  KNOWN_SPEC_VERSIONS,
+  normalizeSpecVersion,
+  profileFor,
+  resolveSpecVersion,
+} from './spec.js';
 import { withRunSpan } from './telemetry.js';
 
 export interface RunOptions {
@@ -69,7 +74,7 @@ async function runFullChecksImpl(baseUrl: string, opts: RunOptions): Promise<Com
   const discovery = await discover(baseUrl, probe);
 
   const version: SpecVersion = resolveSpecVersion(discovery?.protocolVersion);
-  const methods = methodsFor(version);
+  const profile = profileFor(version);
 
   // Only emit the version check when we actually got a card to read.
   const versionCheck = discovery ? makeVersionCheck(discovery.protocolVersion, version) : undefined;
@@ -77,18 +82,18 @@ async function runFullChecksImpl(baseUrl: string, opts: RunOptions): Promise<Com
   const protocolResults =
     !opts.skipProtocol && discovery
       ? [
-          ...(await jsonRpcChecks(discovery.endpoint, methods, probe)),
+          ...(await jsonRpcChecks(discovery.endpoint, profile, probe)),
           ...(await methodChecks(
             discovery.endpoint,
-            methods,
+            profile,
             { streaming: discovery.streaming === true },
             probe,
           )),
-          ...(await pushNotificationChecks(baseUrl, discovery.endpoint, methods, probe)),
+          ...(await pushNotificationChecks(baseUrl, discovery.endpoint, profile, probe)),
         ]
       : [];
   const securityResults = opts.skipSecurity ? [] : await cardSsrfChecks(baseUrl, probe);
-  const authResults = opts.skipAuth ? [] : await authProbeChecks(baseUrl, methods, probe);
+  const authResults = opts.skipAuth ? [] : await authProbeChecks(baseUrl, profile, probe);
 
   const checks = decorateAll([
     ...cardResults,
@@ -151,7 +156,7 @@ function makeVersionCheck(
       durationMs: 0,
     };
   }
-  if (!KNOWN_SPEC_VERSIONS.includes(resolved) || declared !== resolved) {
+  if (normalizeSpecVersion(declared) === undefined) {
     // declared is set but we don't know it — resolveSpecVersion fell back.
     return {
       id: 'card.protocolVersion',
@@ -164,7 +169,7 @@ function makeVersionCheck(
   }
   return {
     id: 'card.protocolVersion',
-    title: `Agent card declares a known protocolVersion (v${declared})`,
+    title: `Agent card declares a known protocolVersion (v${resolved})`,
     severity: 'should',
     status: 'pass',
     durationMs: 0,

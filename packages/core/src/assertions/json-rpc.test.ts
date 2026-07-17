@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { methodsFor } from '../spec.js';
+import { profileFor } from '../spec.js';
 import { jsonRpcChecks } from './json-rpc.js';
 
 const ENDPOINT = 'https://agent.example.com/a2a';
-const METHODS = methodsFor('1.0');
+const PROFILE = profileFor('0.3');
+
+const ERROR = (code: number) => ({ jsonrpc: '2.0', id: 1, error: { code, message: 'x' } });
 
 function mockResponses(bodies: Array<Record<string, unknown>>): void {
   let i = 0;
@@ -38,7 +40,7 @@ describe('jsonRpcChecks', () => {
       { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'batch not supported' } },
     ]);
 
-    const results = await jsonRpcChecks(ENDPOINT, METHODS);
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
     expect(results).toHaveLength(7);
     expect(results.every((r) => r.status === 'pass')).toBe(true);
     expect(results.find((r) => r.id === 'rpc.batch')?.status).toBe('pass');
@@ -70,7 +72,7 @@ describe('jsonRpcChecks', () => {
       }),
     );
 
-    const results = await jsonRpcChecks(ENDPOINT, METHODS);
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
     expect(results.find((r) => r.id === 'rpc.batch')?.status).toBe('pass');
   });
 
@@ -86,7 +88,7 @@ describe('jsonRpcChecks', () => {
       { jsonrpc: '2.0', id: 1, result: 'echo' },
     ]);
 
-    const results = await jsonRpcChecks(ENDPOINT, METHODS);
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
     const batch = results.find((r) => r.id === 'rpc.batch');
     expect(batch?.status).toBe('fail');
     expect(batch?.message).toMatch(/single non-array response/);
@@ -95,7 +97,7 @@ describe('jsonRpcChecks', () => {
   it('fails when server returns success instead of error', async () => {
     mockResponses([{ jsonrpc: '2.0', id: 1, result: {} }]);
 
-    const results = await jsonRpcChecks(ENDPOINT, METHODS);
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
     expect(results[0]?.status).toBe('fail');
     expect(results[0]?.message).toMatch(/expected error response/);
   });
@@ -103,14 +105,33 @@ describe('jsonRpcChecks', () => {
   it('fails when body is not JSON-RPC 2.0 shape', async () => {
     const fetchMock = vi.fn(async () => new Response('not a json rpc envelope', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const results = await jsonRpcChecks(ENDPOINT, METHODS);
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
     expect(results[0]?.status).toBe('fail');
   });
 
   it('fails on wrong error code', async () => {
     mockResponses([{ jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'Internal error' } }]);
-    const results = await jsonRpcChecks(ENDPOINT, METHODS);
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
     expect(results[0]?.status).toBe('fail');
     expect(results[0]?.message).toMatch(/-32700/);
+  });
+
+  it('probes A2A-Version negotiation on the 1.0 binding with an unsupported version', async () => {
+    mockResponses(Array.from({ length: 7 }, () => ERROR(-32009)));
+    const results = await jsonRpcChecks(ENDPOINT, profileFor('1.0'));
+    const neg = results.find((r) => r.id === 'rpc.versionNegotiation');
+    expect(neg?.status).toBe('pass');
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const sentVersions = fetchMock.mock.calls.map(([, init]) =>
+      new Headers((init as RequestInit).headers as Record<string, string>).get('A2A-Version'),
+    );
+    expect(sentVersions).toContain('99.0');
+  });
+
+  it('skips version negotiation on pre-1.0 bindings', async () => {
+    mockResponses(Array.from({ length: 6 }, () => ERROR(-32601)));
+    const results = await jsonRpcChecks(ENDPOINT, PROFILE);
+    expect(results.some((r) => r.id === 'rpc.versionNegotiation')).toBe(false);
   });
 });

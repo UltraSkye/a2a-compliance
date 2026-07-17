@@ -30,7 +30,7 @@ const AGENT_CARD = {
   description: 'Reference implementation used by a2a-compliance for e2e tests.',
   url: `${PUBLIC_BASE}/a2a`,
   version: '0.1.0',
-  protocolVersion: '1.0',
+  protocolVersion: '0.3',
   capabilities: { streaming: true, pushNotifications: false },
   defaultInputModes: ['text'],
   defaultOutputModes: ['text'],

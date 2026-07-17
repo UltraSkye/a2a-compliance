@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { TaskV1Schema } from './task.js';
 
-// Message & Part — per A2A spec v1.0
-// A Message is the primary payload of message/send and message/stream.
+// Message & Part — 0.3 wire format (kind-discriminated parts, lowercase
+// roles) plus the 1.0 proto-JSON variants further down.
 
 export const MessageRoleSchema = z.enum(['user', 'agent']);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
@@ -55,5 +56,54 @@ export function makeProbeMessage(text: string): Message {
     role: 'user',
     parts: [{ kind: 'text', text }],
     messageId: crypto.randomUUID(),
+  };
+}
+
+// Spec 1.0 proto-JSON wire format: roles are proto enum names and Part
+// is a oneof carrying exactly one of text | raw | url | data.
+
+export const MessageRoleV1Schema = z.enum(['ROLE_USER', 'ROLE_AGENT']);
+export type MessageRoleV1 = z.infer<typeof MessageRoleV1Schema>;
+
+const PART_V1_CONTENT_KEYS = ['text', 'raw', 'url', 'data'] as const;
+
+export const PartV1Schema = z
+  .object({
+    text: z.string().optional(),
+    raw: z.string().optional(),
+    url: z.string().optional(),
+    data: z.unknown().optional(),
+    filename: z.string().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine((p) => PART_V1_CONTENT_KEYS.filter((k) => p[k] !== undefined).length === 1, {
+    message: 'part must set exactly one of text, raw, url, data',
+  });
+export type PartV1 = z.infer<typeof PartV1Schema>;
+
+export const MessageV1Schema = z.object({
+  messageId: z.string().min(1),
+  role: MessageRoleV1Schema,
+  parts: z.array(PartV1Schema).min(1),
+  taskId: z.string().optional(),
+  contextId: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  extensions: z.array(z.string()).optional(),
+  referenceTaskIds: z.array(z.string()).optional(),
+});
+export type MessageV1 = z.infer<typeof MessageV1Schema>;
+
+/** SendMessage result — a oneof wrapper, unlike 0.3's bare Task | Message. */
+export const SendMessageResponseV1Schema = z.union([
+  z.object({ task: TaskV1Schema }),
+  z.object({ message: MessageV1Schema }),
+]);
+export type SendMessageResponseV1 = z.infer<typeof SendMessageResponseV1Schema>;
+
+export function makeProbeMessageV1(text: string): MessageV1 {
+  return {
+    messageId: crypto.randomUUID(),
+    role: 'ROLE_USER',
+    parts: [{ text }],
   };
 }
