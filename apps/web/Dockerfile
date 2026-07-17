@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: shared base with pnpm ----
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /repo
@@ -30,7 +30,7 @@ COPY apps/web apps/web
 RUN pnpm --filter '@a2a-compliance/web...' build
 
 # ---- Stage 4: minimal runtime image ----
-FROM node:24-bookworm-slim AS runner
+FROM node:26-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
@@ -47,7 +47,7 @@ EXPOSE 3000
 
 # Next.js standalone servers answer on / with 200 once the bundle is
 # warm, so the root path works as a liveness probe — no extra /healthz
-# endpoint to maintain. node:24-slim lacks wget / curl; use Node's own
+# endpoint to maintain. node:26-slim lacks wget / curl; use Node's own
 # fetch to keep the image minimal.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
