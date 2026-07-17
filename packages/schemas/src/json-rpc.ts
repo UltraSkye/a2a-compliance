@@ -54,6 +54,9 @@ export const A2AErrorCode = {
   UnsupportedOperationError: -32004,
   ContentTypeNotSupportedError: -32005,
   InvalidAgentResponseError: -32006,
+  ExtendedAgentCardNotConfiguredError: -32007,
+  ExtensionSupportRequiredError: -32008,
+  VersionNotSupportedError: -32009,
 } as const;
 
 export function isErrorResponse(
