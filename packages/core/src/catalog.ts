@@ -68,7 +68,7 @@ export const CHECK_CATALOG: Record<string, CheckMeta> = {
     severity: 'should',
     title: 'Agent card declares a known protocolVersion',
     description:
-      'The card SHOULD declare protocolVersion so clients can negotiate method names. Recognised values today: 0.3, 1.0.',
+      'The card SHOULD declare protocolVersion so clients can negotiate method names. Recognised values today: 0.2, 0.3, 1.0 (patch digits are ignored per spec).',
     specRef: { section: 'Agent Card', url: `${A2A}#agent-card` },
   },
   'rpc.parseError': {
@@ -103,6 +103,15 @@ export const CHECK_CATALOG: Record<string, CheckMeta> = {
     description:
       'Per JSON-RPC 2.0 spec, batch is optional. Servers SHOULD either answer with an array of responses or reject the batch with a single -32600 error — but MUST NOT stall, echo a single response, or return malformed JSON.',
     specRef: { section: 'batch', url: `${JSONRPC}#batch` },
+  },
+  'rpc.versionNegotiation': {
+    id: 'rpc.versionNegotiation',
+    category: 'spec',
+    severity: 'should',
+    title: 'Unsupported A2A-Version is rejected',
+    description:
+      'Spec 1.0: agents MUST reject a request carrying an unsupported A2A-Version with VersionNotSupportedError (-32009). Probed only against agents that declare protocolVersion 1.0.',
+    specRef: { section: 'Protocol Versioning', url: `${A2A}#protocol-versioning` },
   },
   'rpc.tasksGet.notFound': {
     id: 'rpc.tasksGet.notFound',

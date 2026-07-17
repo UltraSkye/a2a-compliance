@@ -7,12 +7,13 @@ import {
 import { fetchWithTimeout, now, type ProbeOptions, readCappedText } from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
-import type { SpecMethods } from '../spec.js';
+import type { SpecProfile } from '../spec.js';
 
 interface RpcProbe {
   title: string;
   body: string;
   contentType?: string;
+  headers?: Record<string, string>;
   expectedErrorCode?: number;
   acceptableErrorCodes?: number[];
 }
@@ -28,7 +29,7 @@ async function probe(
   try {
     const res = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': p.contentType ?? 'application/json' },
+      headers: { 'Content-Type': p.contentType ?? 'application/json', ...p.headers },
       body: p.body,
       ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
@@ -99,9 +100,10 @@ async function probe(
 
 export async function jsonRpcChecks(
   endpoint: string,
-  methods: SpecMethods,
+  profile: SpecProfile,
   po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
+  const { methods, headers } = profile;
   const results: CheckResult[] = [];
 
   results.push(
@@ -112,6 +114,7 @@ export async function jsonRpcChecks(
       {
         title: 'Rejects invalid JSON with -32700 Parse error',
         body: '{ this is not json',
+        headers,
         expectedErrorCode: JsonRpcErrorCode.ParseError,
       },
       po,
@@ -126,6 +129,7 @@ export async function jsonRpcChecks(
       {
         title: 'Rejects malformed JSON-RPC envelope with -32600 Invalid Request',
         body: JSON.stringify({ id: 1, method: 'any.method' }),
+        headers,
         expectedErrorCode: JsonRpcErrorCode.InvalidRequest,
       },
       po,
@@ -144,6 +148,7 @@ export async function jsonRpcChecks(
           id: 1,
           method: 'compliance.probe.nonexistent',
         }),
+        headers,
         expectedErrorCode: JsonRpcErrorCode.MethodNotFound,
       },
       po,
@@ -165,6 +170,7 @@ export async function jsonRpcChecks(
           method: methods.get,
           params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
         }),
+        headers,
         acceptableErrorCodes: [A2AErrorCode.TaskNotFoundError, JsonRpcErrorCode.InvalidParams],
       },
       po,
@@ -186,6 +192,7 @@ export async function jsonRpcChecks(
           method: methods.resubscribe,
           params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
         }),
+        headers,
         acceptableErrorCodes: [
           A2AErrorCode.TaskNotFoundError,
           JsonRpcErrorCode.InvalidParams,
@@ -211,6 +218,7 @@ export async function jsonRpcChecks(
           method: methods.cancel,
           params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
         }),
+        headers,
         acceptableErrorCodes: [
           A2AErrorCode.TaskNotFoundError,
           A2AErrorCode.TaskNotCancelableError,
@@ -221,7 +229,32 @@ export async function jsonRpcChecks(
     ),
   );
 
-  results.push(await batchCheck(endpoint, po));
+  // Spec 1.0 §6: agents MUST reject an unsupported A2A-Version with
+  // VersionNotSupportedError. Only meaningful for agents that declare 1.0 —
+  // earlier bindings predate the service parameter entirely.
+  if (profile.version === '1.0') {
+    results.push(
+      await probe(
+        endpoint,
+        'rpc.versionNegotiation',
+        'should',
+        {
+          title: 'Unsupported A2A-Version is rejected with VersionNotSupportedError (-32009)',
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 5,
+            method: methods.get,
+            params: { id: 'compliance-probe-nonexistent-task-id-00000000' },
+          }),
+          headers: { ...headers, 'A2A-Version': '99.0' },
+          acceptableErrorCodes: [A2AErrorCode.VersionNotSupportedError],
+        },
+        po,
+      ),
+    );
+  }
+
+  results.push(await batchCheck(endpoint, po, headers));
 
   return results;
 }
@@ -234,7 +267,11 @@ export async function jsonRpcChecks(
  * unwrapped response, or returning malformed JSON — all of those break
  * spec-compliant batch clients in subtle ways.
  */
-async function batchCheck(endpoint: string, po: ProbeOptions = {}): Promise<CheckResult> {
+async function batchCheck(
+  endpoint: string,
+  po: ProbeOptions = {},
+  headers: Record<string, string> = {},
+): Promise<CheckResult> {
   const t0 = now();
   const id = 'rpc.batch';
   const title = 'Handles a JSON-RPC batch request';
@@ -245,7 +282,7 @@ async function batchCheck(endpoint: string, po: ProbeOptions = {}): Promise<Chec
   try {
     const res = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...headers },
       body,
       ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });

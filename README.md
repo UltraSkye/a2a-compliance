@@ -28,9 +28,10 @@
   `protocolVersion`.
 - **Probe a deployed A2A agent** for JSON-RPC 2.0 conformance:
   parse-error, invalid-request, method-not-found, batch.
-- **Certify the A2A method surface** — `message/send`, `message/stream`,
-  `tasks/get`, `tasks/cancel`, `tasks/resubscribe`,
-  `tasks/pushNotificationConfig/*` (v0.3 + v1.0 method names).
+- **Certify the A2A method surface** — `SendMessage`, `SendStreamingMessage`,
+  `GetTask`, `CancelTask`, `SubscribeToTask`, push-notification config
+  (1.0 PascalCase binding, plus the legacy 0.2 `tasks/*` and 0.3
+  `message/*` namespaces).
 - **Audit security** — SSRF on every URL in the card, HTTPS enforcement,
   CORS `*` + credentials, redirect-chain SSRF, DNS-rebinding TOCTOU,
   anonymous-challenge + OAuth discovery.
@@ -82,8 +83,9 @@ deployment.**
   batch handling.
 - **A2A method set** — `message/send` / `tasks/send`, `message/stream` /
   `tasks/sendSubscribe`, `tasks/get`, `tasks/cancel`, `tasks/resubscribe`,
-  push-notification config round-trip. Probe method names adapt to the
-  `protocolVersion` declared by the card (v0.3 and v1.0 today).
+  push-notification config round-trip. Probe method names, payload
+  shapes, and the `A2A-Version` header adapt to the `protocolVersion`
+  declared by the card (0.2, 0.3, and 1.0 today).
   Capability-gated checks promote to MUST when the card declares the
   capability — false-advertising detection.
 - **Auth** — anon-challenge probe (expect 401+`WWW-Authenticate` or typed

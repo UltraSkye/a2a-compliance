@@ -1,18 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { profileFor } from '../spec.js';
 import { pushNotificationChecks } from './push-notifications.js';
 
 const BASE = 'https://agent.example.com';
 const ENDPOINT = `${BASE}/a2a`;
 
-const V1_METHODS = {
-  send: 'message/send',
-  stream: 'message/stream',
-  get: 'tasks/get',
-  cancel: 'tasks/cancel',
-  resubscribe: 'tasks/resubscribe',
-  pushSet: 'tasks/pushNotificationConfig/set',
-  pushGet: 'tasks/pushNotificationConfig/get',
-};
+const PROFILE = profileFor('0.3');
 
 const cardWithPush = {
   name: 't',
@@ -48,7 +41,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => okJson(cardWithoutPush)),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results).toHaveLength(1);
     expect(results[0]?.id).toBe('rpc.pushNotifications.capability');
     expect(results[0]?.status).toBe('skip');
@@ -59,7 +52,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => okJson({ garbage: true })),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results[0]?.status).toBe('skip');
   });
 
@@ -70,7 +63,7 @@ describe('pushNotificationChecks', () => {
         throw new Error('network down');
       }),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results[0]?.status).toBe('skip');
   });
 
@@ -85,7 +78,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results).toHaveLength(2);
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.status).toBe('pass');
     expect(results.find((r) => r.id === 'rpc.pushNotifications.get')?.status).toBe('pass');
@@ -102,7 +95,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     const set = results.find((r) => r.id === 'rpc.pushNotifications.set');
     expect(set?.severity).toBe('must');
     expect(set?.status).toBe('fail');
@@ -119,7 +112,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.status).toBe('fail');
   });
 
@@ -134,7 +127,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     // A success result means the server accepted the probe — treat as pass.
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.status).toBe('pass');
   });
@@ -150,7 +143,7 @@ describe('pushNotificationChecks', () => {
       'fetch',
       vi.fn(async () => queue[i++] ?? okJson({})),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.status).toBe('fail');
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.message).toMatch(/not JSON/);
   });
@@ -166,7 +159,7 @@ describe('pushNotificationChecks', () => {
         throw new Error('fetch failed');
       }),
     );
-    const results = await pushNotificationChecks(BASE, ENDPOINT, V1_METHODS);
+    const results = await pushNotificationChecks(BASE, ENDPOINT, PROFILE);
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.status).toBe('fail');
     expect(results.find((r) => r.id === 'rpc.pushNotifications.set')?.message).toBe('fetch failed');
   });

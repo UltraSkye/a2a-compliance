@@ -4,6 +4,8 @@ import {
   AgentCardSchema,
   isErrorResponse,
   JsonRpcResponseSchema,
+  makeProbeMessage,
+  makeProbeMessageV1,
 } from '@a2a-compliance/schemas';
 import {
   fetchWithTimeout,
@@ -14,7 +16,7 @@ import {
 } from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
-import type { SpecMethods } from '../spec.js';
+import type { SpecProfile } from '../spec.js';
 
 /**
  * Probe authentication behaviour: if the card declares any non-'none'
@@ -30,7 +32,7 @@ import type { SpecMethods } from '../spec.js';
  */
 export async function authProbeChecks(
   baseUrl: string,
-  methods: SpecMethods,
+  profile: SpecProfile,
   po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
   const card = await fetchCard(baseUrl, po);
@@ -45,7 +47,7 @@ export async function authProbeChecks(
 
   const endpoint = card.url;
   const results: CheckResult[] = [];
-  results.push(await anonChallengeCheck(endpoint, methods, schemes, po));
+  results.push(await anonChallengeCheck(endpoint, profile, schemes, po));
 
   if (schemes.includes('oauth2') || schemes.includes('openIdConnect')) {
     results.push(await oauthDiscoveryCheck(baseUrl, card, po));
@@ -56,22 +58,25 @@ export async function authProbeChecks(
 
 async function anonChallengeCheck(
   endpoint: string,
-  methods: SpecMethods,
+  profile: SpecProfile,
   schemes: readonly string[],
   po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
+  const methods = profile.methods;
   const id = 'auth.anonChallenge';
   const title = `${methods.send} challenges unauthenticated callers`;
+  const probeMessage =
+    profile.version === '1.0' ? makeProbeMessageV1('anon probe') : makeProbeMessage('anon probe');
   try {
     const res = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...profile.headers },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
         method: methods.send,
-        params: { message: { role: 'user', parts: [{ type: 'text', text: 'anon probe' }] } },
+        params: { message: probeMessage },
       }),
       ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });

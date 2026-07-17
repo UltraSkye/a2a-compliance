@@ -4,12 +4,14 @@ import {
   JsonRpcResponseSchema,
   MessageSchema,
   makeProbeMessage,
+  makeProbeMessageV1,
+  SendMessageResponseV1Schema,
   TaskSchema,
 } from '@a2a-compliance/schemas';
 import { fetchWithTimeout, now, type ProbeOptions, readCappedText } from '../http.js';
 import { redactInText } from '../redact.js';
 import type { CheckResult } from '../report.js';
-import type { SpecMethods } from '../spec.js';
+import type { SpecProfile } from '../spec.js';
 
 // Error codes we tolerate from the "send" method during a compliance probe.
 // Agents without a text skill may legitimately reject our probe payload;
@@ -23,32 +25,55 @@ const TOLERATED_SEND_ERROR_CODES: number[] = [
   -32006,
 ];
 
-function sendParams(methodName: string): Record<string, unknown> {
-  // v0.3's tasks/send expects {id, message}; v1.0's message/send expects {message}.
-  // Both accept our probe message; the v0.3 agent will just ignore extra fields.
+function sendParams(profile: SpecProfile): Record<string, unknown> {
+  // 0.2's tasks/send expects {id, message}; 0.3+ send methods expect
+  // {message}. 1.0 additionally switched Message to the proto-JSON shape.
+  if (profile.version === '1.0') {
+    return { message: makeProbeMessageV1('ping from a2a-compliance') };
+  }
   const probe = makeProbeMessage('ping from a2a-compliance');
-  return methodName === 'tasks/send'
+  return profile.version === '0.2'
     ? { id: 'compliance-probe-task-id-00000000', message: probe }
     : { message: probe };
 }
 
+interface SendResultVerdict {
+  ok: boolean;
+  evidence?: unknown;
+}
+
+function validateSendResult(profile: SpecProfile, result: unknown): SendResultVerdict {
+  if (profile.version === '1.0') {
+    const parsed = SendMessageResponseV1Schema.safeParse(result);
+    return parsed.success ? { ok: true } : { ok: false, evidence: parsed.error.issues };
+  }
+  const asTask = TaskSchema.safeParse(result);
+  const asMessage = MessageSchema.safeParse(result);
+  if (asTask.success || asMessage.success) return { ok: true };
+  return {
+    ok: false,
+    evidence: { taskIssues: asTask.error?.issues, messageIssues: asMessage.error?.issues },
+  };
+}
+
 export async function messageSendCheck(
   endpoint: string,
-  methods: SpecMethods,
+  profile: SpecProfile,
   po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
+  const methods = profile.methods;
   const body = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
     method: methods.send,
-    params: sendParams(methods.send),
+    params: sendParams(profile),
   });
 
   try {
     const res = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...profile.headers },
       body,
       ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
@@ -95,9 +120,8 @@ export async function messageSendCheck(
       };
     }
 
-    const asTask = TaskSchema.safeParse(parsed.data.result);
-    const asMessage = MessageSchema.safeParse(parsed.data.result);
-    if (asTask.success || asMessage.success) {
+    const verdict = validateSendResult(profile, parsed.data.result);
+    if (verdict.ok) {
       return {
         id: 'rpc.messageSend.shape',
         title: `${methods.send} returns a valid JSON-RPC response`,
@@ -110,9 +134,11 @@ export async function messageSendCheck(
     return fail(
       'rpc.messageSend.shape',
       `${methods.send} returns a valid JSON-RPC response`,
-      'result is neither a valid Task nor a Message',
+      profile.version === '1.0'
+        ? 'result is not a valid SendMessageResponse ({task} or {message})'
+        : 'result is neither a valid Task nor a Message',
       t0,
-      { taskIssues: asTask.error?.issues, messageIssues: asMessage.error?.issues },
+      verdict.evidence,
     );
   } catch (err) {
     return fail(
@@ -130,11 +156,12 @@ export interface CapabilityHints {
 
 export async function messageStreamContentTypeCheck(
   endpoint: string,
-  methods: SpecMethods,
+  profile: SpecProfile,
   hints: CapabilityHints = {},
   po: ProbeOptions = {},
 ): Promise<CheckResult> {
   const t0 = now();
+  const methods = profile.methods;
   // False-advertising detection: if the card declared streaming, a
   // non-conforming stream response is a MUST-level failure rather than
   // a SHOULD-level warning. If the capability is absent we keep the
@@ -145,13 +172,17 @@ export async function messageStreamContentTypeCheck(
     jsonrpc: '2.0',
     id: 1,
     method: methods.stream,
-    params: sendParams(methods.send),
+    params: sendParams(profile),
   });
 
   try {
     const res = await fetchWithTimeout(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...profile.headers,
+      },
       body,
       ...(po.pinDns === undefined ? {} : { pinDns: po.pinDns }),
     });
@@ -223,13 +254,13 @@ export async function messageStreamContentTypeCheck(
 
 export async function methodChecks(
   endpoint: string,
-  methods: SpecMethods,
+  profile: SpecProfile,
   hints: CapabilityHints = {},
   po: ProbeOptions = {},
 ): Promise<CheckResult[]> {
   return [
-    await messageSendCheck(endpoint, methods, po),
-    await messageStreamContentTypeCheck(endpoint, methods, hints, po),
+    await messageSendCheck(endpoint, profile, po),
+    await messageStreamContentTypeCheck(endpoint, profile, hints, po),
   ];
 }
 

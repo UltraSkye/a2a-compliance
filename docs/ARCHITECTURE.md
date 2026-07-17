@@ -210,26 +210,33 @@ otherwise includes them in every full run.
 
 ### Spec-version adaptation
 
-A2A v0.3 and v1.0 renamed the core methods
-(`tasks/send` → `message/send`, `tasks/sendSubscribe` → `message/stream`,
-`tasks/pushNotification/*` → `tasks/pushNotificationConfig/*`). Probing
-a v0.3 agent with v1.0 method names would produce false negatives —
-every method probe would fail with `-32601 Method not found`.
+Every A2A minor so far renamed the method surface: 0.2 used `tasks/*`,
+0.3 moved send/stream to `message/*` and the push-config namespace, and
+1.0 went proto-first with PascalCase methods, proto-JSON payloads
+(`ROLE_USER`, `TASK_STATE_*`, oneof parts), a `{task}`/`{message}`
+result wrapper, and a mandatory `A2A-Version` header. Probing an agent
+with the wrong binding would produce false negatives — every method
+probe would fail with `-32601 Method not found`.
 
 The runner reads `protocolVersion` from the agent card during discovery
 and picks the method name set from `packages/core/src/spec.ts`. Current
 map:
 
-| key | v0.3 | v1.0 |
-|-----|------|------|
-| send | `tasks/send` | `message/send` |
-| stream | `tasks/sendSubscribe` | `message/stream` |
-| get | `tasks/get` | `tasks/get` |
-| cancel | `tasks/cancel` | `tasks/cancel` |
-| resubscribe | `tasks/resubscribe` | `tasks/resubscribe` |
-| pushSet | `tasks/pushNotification/set` | `tasks/pushNotificationConfig/set` |
-| pushGet | `tasks/pushNotification/get` | `tasks/pushNotificationConfig/get` |
+| key | 0.2 | 0.3 | 1.0 |
+|-----|-----|-----|-----|
+| send | `tasks/send` | `message/send` | `SendMessage` |
+| stream | `tasks/sendSubscribe` | `message/stream` | `SendStreamingMessage` |
+| get | `tasks/get` | `tasks/get` | `GetTask` |
+| cancel | `tasks/cancel` | `tasks/cancel` | `CancelTask` |
+| resubscribe | `tasks/resubscribe` | `tasks/resubscribe` | `SubscribeToTask` |
+| pushSet | `tasks/pushNotification/set` | `tasks/pushNotificationConfig/set` | `CreateTaskPushNotificationConfig` |
+| pushGet | `tasks/pushNotification/get` | `tasks/pushNotificationConfig/get` | `GetTaskPushNotificationConfig` |
 
-When the card omits `protocolVersion` or declares a version outside this
-set, the `card.protocolVersion` check emits a SHOULD-level warn and the
-runner falls back to v1.0 method names.
+Patch digits in the declared version are ignored (`0.3.0` → `0.3`) per
+spec §6. When the card omits `protocolVersion` or declares a version
+outside this set, the `card.protocolVersion` check emits a SHOULD-level
+warn and the runner falls back to the 0.3 binding — the spec defines an
+empty `A2A-Version` as a 0.3 client. On the 1.0 binding every probe
+carries `A2A-Version: 1.0` and an extra `rpc.versionNegotiation` check
+verifies that an unsupported version is rejected with
+`VersionNotSupportedError (-32009)`.
