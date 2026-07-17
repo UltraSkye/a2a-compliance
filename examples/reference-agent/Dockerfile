@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:26-alpine
 WORKDIR /app
 
 # Reference agent ships zero runtime deps — no install layer needed.
