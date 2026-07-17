@@ -61,3 +61,14 @@ export const TaskV1Schema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type TaskV1 = z.infer<typeof TaskV1Schema>;
+
+// All four ListTasksResponse fields are REQUIRED in the proto, but proto3
+// JSON emitters drop default values (empty array, "", 0) — so every field
+// must be optional here or a compliant empty listing would fail.
+export const ListTasksResponseV1Schema = z.object({
+  tasks: z.array(TaskV1Schema).optional(),
+  nextPageToken: z.string().optional(),
+  pageSize: z.number().int().optional(),
+  totalSize: z.number().int().optional(),
+});
+export type ListTasksResponseV1 = z.infer<typeof ListTasksResponseV1Schema>;

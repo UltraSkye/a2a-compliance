@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versioning: [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A2A 1.0 proto-first binding.** Spec profiles 0.2 (`tasks/*`),
+  0.3 (`message/*`), 1.0 (PascalCase: `SendMessage`, `GetTask`,
+  `CancelTask`, `SubscribeToTask`, push-config CRUD), selected from the
+  card's `protocolVersion` with patch digits ignored. Default binding is
+  0.3 — the spec defines an empty `A2A-Version` as a 0.3 client.
+- **1.0 wire-format schemas.** `MessageV1` (`ROLE_*` roles, oneof parts),
+  `TaskV1` (`TASK_STATE_*`), `SendMessageResponseV1` (`{task}|{message}`
+  wrapper), `ListTasksResponseV1`, `makeProbeMessageV1`.
+- **`A2A-Version` header** on every probe (0.3+) and a new
+  `rpc.versionNegotiation` check: an unsupported version MUST be rejected
+  with `VersionNotSupportedError (-32009)` (probed on 1.0 only).
+- **`rpc.tasksList.shape` check** for the 1.0 `ListTasks` core method:
+  valid `ListTasksResponse` or well-formed error; unauthenticated refusal
+  tolerated as a warning.
+- New 1.0 error codes in schemas: `ExtendedAgentCardNotConfiguredError`
+  (-32007), `ExtensionSupportRequiredError` (-32008),
+  `VersionNotSupportedError` (-32009).
+
+### Changed
+
+- **Spec-drift baseline** now tracks canonical `specification/a2a.proto`
+  (upstream stopped committing the generated `a2a.json`) with real
+  SHA-256 digests; the weekly drift issue loop is unblocked.
+- Version labels corrected: the former '0.3' profile was the 0.2-era
+  `tasks/*` namespace and the former '1.0' was the released 0.3
+  `message/*` binding. Reports and probe titles now use honest labels.
+- Reference agent declares `protocolVersion: 0.3` (it implements the
+  `message/*` binding).
+- Dependencies refreshed within semver ranges (undici 8.7, next 15.5.20,
+  zod 4.4.3, MCP SDK 1.29, vitest 4.1.10, biome 2.5.4); `pnpm audit`
+  clean via vite/postcss overrides. Docker base images on node 26;
+  GitHub Actions bumped (download-artifact v8, buildx v4, login v4,
+  build-push v7, attest-build-provenance v4).
+
 ## [0.3.3] - 2026-04-24
 
 ### Security
