@@ -94,7 +94,7 @@
   },
   "dependencies": {
     "@a2a-compliance/core": "workspace:*",
-    "commander": "^12.1.0",
+    "commander": "^15.0.0",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
