@@ -27,7 +27,7 @@ jobs:
         # match (done separately in each publishable package.json).
         node: ['22', '24']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # pnpm version comes from package.json's "packageManager" field —
       # specifying it here too would fail with ERR_PNPM_BAD_PM_VERSION.
@@ -63,7 +63,7 @@ jobs:
     name: web (typecheck + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # pnpm version comes from package.json's "packageManager" field —
       # specifying it here too would fail with ERR_PNPM_BAD_PM_VERSION.
@@ -91,7 +91,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Trivy — filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
