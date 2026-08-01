@@ -78,7 +78,7 @@ jobs:
 
       - name: Open issue if drift detected
         if: fromJSON(steps.diff.outputs.drift).changed == true || fromJSON(steps.diff.outputs.drift).errored == true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('node:fs');
